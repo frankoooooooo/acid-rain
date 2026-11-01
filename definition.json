@@ -4,9 +4,20 @@
   "name": "Acid Rain",
   "parameters": [
     {
-      "id": "blend",
-      "label": "Blend",
-      "default": 0,
+      "id": "cutoff",
+      "label": "cutoff",
+      "default": 0.4,
+      "mapping": {
+        "kind": "exponential",
+        "minimum": 220,
+        "maximum": 5600
+      },
+      "display": "percent"
+    },
+    {
+      "id": "reso",
+      "label": "reso",
+      "default": 0.4,
       "mapping": {
         "kind": "linear",
         "minimum": 0,
@@ -15,8 +26,8 @@
       "display": "percent"
     },
     {
-      "id": "width",
-      "label": "Width",
+      "id": "envmod",
+      "label": "env mod",
       "default": 0.5,
       "mapping": {
         "kind": "linear",
@@ -26,66 +37,61 @@
       "display": "percent"
     },
     {
-      "id": "level",
-      "label": "Level",
-      "default": 0.65,
+      "id": "decay",
+      "label": "decay",
+      "default": 0.30103,
       "mapping": {
-        "kind": "linear",
-        "minimum": 0,
-        "maximum": 1
+        "kind": "exponential",
+        "minimum": 0.2,
+        "maximum": 2.0
       },
-      "display": "percent"
+      "display": "duration"
     },
     {
-      "id": "motion",
-      "label": "Motion",
-      "default": 0.5,
-      "mapping": {
-        "kind": "linear",
-        "minimum": 0,
-        "maximum": 1
-      },
-      "display": "percent"
-    },
-    {
-      "id": "drive",
-      "label": "Drive",
+      "id": "accent",
+      "label": "accent",
       "control": 0,
       "default": 0,
       "mapping": {
-        "kind": "linear",
-        "minimum": 0,
-        "maximum": 1
+        "kind": "enum",
+        "labels": [
+          "off",
+          "on",
+          "auto"
+        ]
       },
-      "display": "percent"
+      "display": "enum"
     },
     {
-      "id": "crush",
-      "label": "Crush",
+      "id": "slide",
+      "label": "slide",
       "control": 1,
       "default": 0,
       "mapping": {
-        "kind": "linear",
-        "minimum": 0,
-        "maximum": 1
+        "kind": "enum",
+        "labels": [
+          "off",
+          "on",
+          "auto"
+        ]
       },
-      "display": "percent"
+      "display": "enum"
     },
     {
-      "id": "rectify",
-      "label": "Rectify",
+      "id": "ph",
+      "label": "ph",
       "control": 2,
-      "default": 0,
+      "default": 1,
       "mapping": {
         "kind": "linear",
-        "minimum": 0,
-        "maximum": 1
+        "minimum": 2,
+        "maximum": 7
       },
-      "display": "percent"
+      "display": "ratio"
     },
     {
-      "id": "smooth",
-      "label": "Smooth",
+      "id": "dew",
+      "label": "dew",
       "control": 3,
       "default": 0,
       "mapping": {
@@ -97,32 +103,82 @@
     }
   ],
   "presets": {
-    "Triangle": {
-      "blend": 0,
-      "width": 0.5,
-      "level": 0.65,
-      "motion": 0.5,
-      "drive": 0,
-      "crush": 0,
-      "rectify": 0,
-      "smooth": 0
+    "Init": {
+      "cutoff": 0.4,
+      "reso": 0.4,
+      "envmod": 0.5,
+      "decay": 0.30103,
+      "accent": 0.0,
+      "slide": 0.0,
+      "ph": 1.0,
+      "dew": 0
     },
-    "Pulse": {
-      "blend": 1,
-      "width": 0.5,
-      "level": 0.5,
-      "motion": 0.5,
-      "drive": 0,
-      "crush": 0,
-      "rectify": 0,
-      "smooth": 0
+    "Squelch": {
+      "cutoff": 0.254,
+      "reso": 0.85,
+      "envmod": 0.75,
+      "decay": 0.176,
+      "accent": 1.0,
+      "slide": 1.0,
+      "ph": 0.7,
+      "dew": 0.45
+    },
+    "Drizzle": {
+      "cutoff": 0.435,
+      "reso": 0.6,
+      "envmod": 0.45,
+      "decay": 0.398,
+      "accent": 1.0,
+      "slide": 1.0,
+      "ph": 0.9,
+      "dew": 0.3
+    },
+    "Downpour": {
+      "cutoff": 0.185,
+      "reso": 0.95,
+      "envmod": 0.9,
+      "decay": 0.097,
+      "accent": 1.0,
+      "slide": 1.0,
+      "ph": 0.2,
+      "dew": 0.85
+    },
+    "Corroded": {
+      "cutoff": 0.358,
+      "reso": 0.7,
+      "envmod": 0.6,
+      "decay": 0.301,
+      "accent": 0.5,
+      "slide": 1.0,
+      "ph": 0.0,
+      "dew": 0.6
+    },
+    "Glider": {
+      "cutoff": 0.524,
+      "reso": 0.5,
+      "envmod": 0.4,
+      "decay": 0.602,
+      "accent": 0.0,
+      "slide": 0.5,
+      "ph": 1.0,
+      "dew": 0
+    },
+    "Monsoon": {
+      "cutoff": 0.096,
+      "reso": 0.9,
+      "envmod": 1.0,
+      "decay": 0.778,
+      "accent": 1.0,
+      "slide": 1.0,
+      "ph": 0.4,
+      "dew": 1.0
     }
   },
   "resources": {
-    "voiceBytes": 8,
+    "voiceBytes": 96,
     "voiceAlignment": 4,
     "voiceCapacity": 8,
-    "sharedBytes": 0,
+    "sharedBytes": 48,
     "outputPeakQ31": 1073741824,
     "display": {
       "stateBytes": 24,
