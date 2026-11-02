@@ -16,7 +16,7 @@ using namespace opxy::draw;
 namespace s = screen;
 
 const i32 second = 1024;                 // Q10 seconds
-const u32 drop_count = 12, splash_count = 2, foam_count = 24;
+const u32 drop_count = 12, splash_count = 2;
 const i32 lane_left = 60 * unit, lane_step = 24 * unit, lane_y = 205 * unit;
 const i32 hold = 461;                    // the eyes hold as bolts for 0.15 s + 0.3 s
 const u32 ripple_turn = 154;
@@ -26,8 +26,9 @@ const i32 reach = 63 * unit;              // a path's points stay within 64 px o
 // more (9 under a bolt), never meet, and neighbouring joints never fold over.
 const i32 reach_u = 32, reach_v = 76;    // 5 px across and down, floor Q10 units
 const i32 grid_reach = 5 * unit;         // Q10 px
-const u32 foam_moves = 6;                // froth flecks moved a frame, at most
-const u32 frame_budget = 14;             // grid segments, splash and froth redrawn a frame, about
+const i32 fall = 103;                    // the raindrop falls for 0.1 s, about three frames
+const i32 face_tight = 24;               // the face's rings span 4 or more of its points: no zigzag
+const u32 frame_budget = 14;             // grid segments, splash and raindrop redrawn a frame, about
 const u8 lane_used = 1, lane_accented = 2, lane_slid = 4, lane_auto = 8;
 
 enum Shade : u32 { black = 0, grey = 1, line = 2, smile_line = 3, bright = 4, mid = 5, dim = 6, face = 7 };
@@ -276,6 +277,7 @@ static inline void restart(DisplayState& state, const Input& input) {
     for (u32 i = 0; i < splash_count; ++i) state.splashes[i].age = -1;
     for (u32 i = 0; i < 4; ++i) state.knobs[i] = input.slots[i];
     for (u32 i = 0; i < 4; ++i) state.keys[i] = 1;
+    state.drop_age = -1;
 }
 
 // --- The frame -----------------------------------------------------------------
@@ -342,29 +344,17 @@ inline void display(DisplayState& state, const Input& input, Frame& frame) {
                 satellite.age = -(51 + static_cast<i32>((h2 >> 18 & 1023) * 72 >> 10));  // 0.05 .. 0.12 s late
                 satellite.phase = static_cast<i32>(h2 >> 24);
             }
-            // Froth: six flecks ride out behind the ring front, two bubbles stay by the drop.
-            for (u32 k = 0; k < 8; ++k) {
-                const u32 h3 = mix(serial * 0x9e3779b1u + k * 131u + 5);
-                Foam& f = state.foam[state.next_foam++ % foam_count];
-                const i32 angle = static_cast<i32>((k * 256 / 6 + (h3 & 31)) & 255);
-                const i32 c = s::wave[(angle + 64) & 255], sn = s::wave[angle];
-                const bool bubble = k >= 6;
-                const i32 start = bubble ? 20 + static_cast<i32>(h3 >> 5 & 63) : 31;
-                const i32 speed = bubble ? 0 : (614 * (819 + static_cast<i32>((h3 >> 11 & 1023) * 410 >> 10))) >> 10;  // 0.6 x the front, x0.8 .. 1.2
-                const i32 drift = static_cast<i32>(h3 >> 21 & 63) - 32;  // sideways, Q10 units a second
-                f.u = u + ((c * start) >> 10);
-                f.v = v + ((sn * start) >> 10);
-                f.du = ((c * speed) >> 10) - ((sn * drift) >> 10);
-                f.dv = ((sn * speed) >> 10) + ((c * drift) >> 10);
-                f.age = 0;
-                f.life = (bubble ? 410 : 614) + static_cast<i32>((h3 >> 27) * (bubble ? 26 : 20));  // 0.4 .. 1.2 s
-            }
+            // The raindrop: it falls onto this note's impact, glitching.
+            state.drop_age = 0;
+            state.drop_u = u;
+            state.drop_v = v;
+            state.drop_seed = mix(serial * 0x85ebca6bu + 7);
         }
         state.last_u = u;
         state.last_v = v;
         state.trickle = 0;
         if (accented) state.since_accent = 0;
-        if (rained || a == 1) {  // it rains, or accent is locked on
+        if (rained) {  // a splash marks the rain; the raindrop marks every note, the eyes every accent
             // A cluster of rain splashes once: a new splash waits until the last is 0.4 s old.
             const Splash& previous = state.splashes[(state.next_splash + splash_count - 1) % splash_count];
             if (!still && (previous.age < 0 || previous.age >= 410)) {
@@ -419,6 +409,7 @@ inline void display(DisplayState& state, const Input& input, Frame& frame) {
         if (drop.glide > 0) drop.glide = drop.glide > dt ? drop.glide - dt : 0;
     }
     i32 peak[drop_count], train[drop_count], inverse[drop_count], turns[drop_count];
+    i32 face_train[drop_count], face_inverse[drop_count], face_turns[drop_count];  // capped at face_tight
     for (u32 d = 0; d < drop_count; ++d) {
         Drop& drop = state.drops[d];
         peak[d] = 0;
@@ -434,6 +425,11 @@ inline void display(DisplayState& state, const Input& input, Frame& frame) {
         if (train[d] < 64) train[d] = 64;
         inverse[d] = (128 << 16) / train[d];
         turns[d] = tight * 41;  // k / 2 pi in 1/256 turns, Q10 of a unit
+        const i32 soft = tight < face_tight ? tight : face_tight;
+        face_train[d] = 6434 * w.rings / (soft * 1024);
+        if (face_train[d] < 64) face_train[d] = 64;
+        face_inverse[d] = (128 << 16) / face_train[d];
+        face_turns[d] = soft * 41;
     }
     // A slide: the glide's drop is drawn on its way from the last one.
     Drop saved[drop_count];
@@ -453,20 +449,20 @@ inline void display(DisplayState& state, const Input& input, Frame& frame) {
     const i32 px = snap(s::centre_x), py = snap(s::centre_y);
 
     // The border: refracted like the floor under it, and pitted where the water
-    // moves it as the pH falls (up to 3 px). At rest it is smooth. Its shift is
+    // moves it as the pH falls (up to 1.5 px). At rest it is smooth. Its shift is
     // smoothed once over neighbours and guarded so its points never bunch.
     i32 points[64][2], shifts[64][2], rest[64][2];
     for (u32 i = 0; i < 64; ++i) {
         rest[i][0] = s::border_u[i];
         rest[i][1] = s::border_v[i];
-        face_shift(state, w, peak, train, inverse, turns, rest[i][0], rest[i][1], shifts[i][0], shifts[i][1]);
+        face_shift(state, w, peak, face_train, face_inverse, face_turns, rest[i][0], rest[i][1], shifts[i][0], shifts[i][1]);
     }
-    smooth(shifts, 64, true);
+    for (u32 pass = 0; pass < 4; ++pass) smooth(shifts, 64, true);  // the border four times: its ends curve tightest
     for (u32 i = 0; i < 64; ++i) {
         const i32 moving = clamp(magnitude(shifts[i][0]) + magnitude(shifts[i][1]), 0, 32) * 32;  // Q10: 1 once it moves about 4 px
         const i32 pit = (((s::pits[i] * acid) >> 10) * moving) >> 10;  // Q10, -1..1
-        shifts[i][0] += ((s::border_u[i] * pit) >> 10) * 3 / 99;
-        shifts[i][1] += ((s::border_v[i] * pit) >> 10) * 3 / 99;
+        shifts[i][0] += ((s::border_u[i] * pit) >> 10) * 3 / 198;  // up to 1.5 px
+        shifts[i][1] += ((s::border_v[i] * pit) >> 10) * 3 / 198;
     }
     guard(rest, shifts, 64, true);
     for (u32 i = 0; i < 64; ++i)
@@ -483,7 +479,7 @@ inline void display(DisplayState& state, const Input& input, Frame& frame) {
     for (u32 i = 0; i < 32; ++i) {
         rest[i][0] = s::smile_u[i];
         rest[i][1] = s::smile_v[i];
-        face_shift(state, w, peak, train, inverse, turns, rest[i][0], rest[i][1], shifts[i][0], shifts[i][1]);
+        face_shift(state, w, peak, face_train, face_inverse, face_turns, rest[i][0], rest[i][1], shifts[i][0], shifts[i][1]);
     }
     smooth(shifts, 32, false);
     guard(rest, shifts, 32, false);
@@ -513,7 +509,7 @@ inline void display(DisplayState& state, const Input& input, Frame& frame) {
             const u32 k = e * 64 + i;
             rest[i][0] = s::eye_u[e] + s::oval_u[k] + (((s::bolt_u[k] - s::oval_u[k]) * state.bolt) >> 10);
             rest[i][1] = s::eye_v[e] + s::oval_v[k] + (((s::bolt_v[k] - s::oval_v[k]) * state.bolt) >> 10);
-            face_shift(state, w, peak, train, inverse, turns, rest[i][0], rest[i][1], shifts[i][0], shifts[i][1]);
+            face_shift(state, w, peak, face_train, face_inverse, face_turns, rest[i][0], rest[i][1], shifts[i][0], shifts[i][1]);
         }
         smooth(shifts, 64, true);
         guard(rest, shifts, 64, true);
@@ -651,42 +647,35 @@ inline void display(DisplayState& state, const Input& input, Frame& frame) {
         }
     }
 
-    // Froth: flecks drift out behind the rings and slow down, shrinking and
-    // fading before they pop; bubbles sit by the drop and pop. They float on
-    // the surface, so the water doesn't refract them. Half the flecks move each
-    // frame, at most `foam_moves`.
-    state.foam_turn ^= 1;
-    u32 moved = 0;
-    for (u32 i = 0; i < foam_count; ++i) {
-        Foam& f = state.foam[i];
-        const u32 node = s::foam + i;
-        if (fresh || still) {
-            f.life = 0;
-            hide(frame, node);
-            continue;
-        }
-        if (!f.life) continue;
-        f.age += dt;
-        f.u += (f.du * dt) >> 10;
-        f.v += (f.dv * dt) >> 10;
-        const i32 drag = 1024 - (dt * 3 >> 1);  // velocity falls by 1.5 a second
-        f.du = (f.du * drag) >> 10;
-        f.dv = (f.dv * drag) >> 10;
-        if (f.age >= f.life) {
-            f.life = 0;
-            hide(frame, node);
-            ++state.splash_cost;
-            continue;
-        }
-        if ((i & 1) != state.foam_turn && f.age > dt) continue;  // its turn is next frame
-        if (moved >= foam_moves) continue;
-        const i32 left = ((f.life - f.age) << 10) / f.life;  // Q10 of its life to go
-        const u32 shade = left > 512 ? bright : left > 256 ? mid : dim;
+    // The raindrop: a tilted, sliced teardrop falling along its tilt onto the
+    // impact for 0.1 s, easing in; each frame its bands tear sideways like a
+    // glitched poster, and now and then one drops out. Gone as it lands.
+    if (state.drop_age >= 0 && !fresh && !still) state.drop_age += dt;
+    if (fresh || still || state.drop_age < 0 || state.drop_age >= fall) {
+        if (fresh || state.drop_age >= 0)
+            for (u32 i = 0; i < 8; ++i) hide(frame, s::raindrop + i);
+        if (state.drop_age >= 0) state.splash_cost += 8;
+        state.drop_age = -1;
+    } else {
         i32 x, y;
-        screen_point(f.u, f.v, 0, 0, x, y);
-        place(frame, node, snap(x), snap(y), 614 + (410 * left >> 10), shade, fill_and_stroke);
-        ++moved;
-        ++state.splash_cost;
+        screen_point(state.drop_u, state.drop_v, 0, 0, x, y);
+        const i32 p = (state.drop_age << 10) / fall, eased = 1024 - (((1024 - p) * (1024 - p)) >> 10);  // Q10
+        const i32 left = 30 * (1024 - eased);  // Q10 px still to fall
+        x -= (left * 433) >> 10;               // along the tilt: sin 25, cos 25
+        y -= (left * 928) >> 10;
+        const u32 frame_index = static_cast<u32>(state.drop_age) / 34;
+        for (u32 i = 0; i < 8; ++i) {
+            const u32 h = mix(state.drop_seed + frame_index * 0x9e3779b9u + s::drop_band[i] * 0x7feb352du);
+            if ((h >> 12 & 15) == 0) {  // a band drops out for a frame
+                hide(frame, s::raindrop + i);
+                continue;
+            }
+            // Every frame tears at least one band (the frame's own pick), others by chance.
+            const bool torn = (h & 1) || s::drop_band[i] == (state.drop_seed + frame_index) % 5;
+            const i32 tear = torn ? (h & 4 ? 1 : -1) * (2 + static_cast<i32>(h >> 3 & 3)) : 0;  // +-2 .. 5 px
+            place(frame, s::raindrop + i, snap(x + tear * unit), snap(y), 1536, bright, stroke);  // 1.5x
+        }
+        state.splash_cost += 8;
     }
 
     // The lane: a fixed ring of sixteen cells, written in turn, with a cursor

@@ -55,6 +55,17 @@ static long long closest(const DisplayState& state) {
 static long long nearest = 1LL << 40;  // over every frame played
 static double bunching = 1;             // the tightest neighbouring border points, as a share of their spacing at rest
 static double rest_spacing[64];
+static double sharpest = 0;             // the most turn the water adds at any border point, degrees
+static double rest_turn[64];
+
+static double turning(const DisplayState& state, u32 i) {
+    const i32* a = state.border[(i + 63) % 64];
+    const i32* b = state.border[i];
+    const i32* c = state.border[(i + 1) % 64];
+    const double ux = b[0] - a[0], uy = b[1] - a[1], vx = c[0] - b[0], vy = c[1] - b[1];
+    const double cosine = (ux * vx + uy * vy) / __builtin_sqrt((ux * ux + uy * uy) * (vx * vx + vy * vy));
+    return __builtin_acos(cosine < -1 ? -1 : cosine > 1 ? 1 : cosine) * 57.29578;
+}
 
 static double spacing(const DisplayState& state, u32 i) {
     const double dx = (state.border[(i + 1) % 64][0] - state.border[i][0]) / 1024.0;
@@ -102,8 +113,10 @@ static void play(const char* name, const i32 (&slots)[8], double& average, u32& 
         const long long gap = closest(state);
         nearest = gap < nearest ? gap : nearest;
         for (u32 i = 0; i < 64; ++i) {
-            if (n == 0) rest_spacing[i] = spacing(state, i);
+            if (n == 0) { rest_spacing[i] = spacing(state, i); rest_turn[i] = turning(state, i); continue; }
             else if (spacing(state, i) / rest_spacing[i] < bunching) bunching = spacing(state, i) / rest_spacing[i];
+            const double added = __builtin_fabs(turning(state, i) - rest_turn[i]);
+            sharpest = added > sharpest ? added : sharpest;
         }
         if (n == 0) continue;
         u32 count = 0;
@@ -117,8 +130,6 @@ static void play(const char* name, const i32 (&slots)[8], double& average, u32& 
             at_rest += count;  // the last second: even decay 2.0's rings (about 6 s) have settled
         }
     }
-    for (u32 i = 0; i < 24; ++i)
-        if (state.foam[i].life) { std::printf("FAIL %s: froth still floating at rest\n", name); ++failures; break; }
     average = frames ? static_cast<double>(changed) / frames : 0;
     std::printf("%s: %.1f nodes a frame while playing, peak %u, %u in the last second of rest\n", name, average, peak, at_rest);
 }
@@ -136,12 +147,18 @@ int main() {
     check("heaviest: about 20 nodes a frame or fewer", average <= 22);
     check("heaviest: still at rest", rest == 0);
     play("reduced motion", heaviest, average, peak, rest, true);
+    const i32 jagged[8] = {full, full, full, 646464646, full / 2, 0, 0, 0};  // the tightest rings, pH 2
+    play("high cutoff, pH 2", jagged, average, peak, rest);
+    check("high cutoff, pH 2: about 20 nodes a frame or fewer", average <= 22);
     // The face's lines never meet: smile and eyes stay 3 px or more inside the border.
     std::printf("closest approach of smile or eye to the border: %.1f px\n", __builtin_sqrt(static_cast<double>(nearest)));
     check("the face's lines never meet", nearest >= 9);
     // The border's points never bunch up: neighbours keep half their spacing at rest.
     std::printf("tightest border spacing: %.0f%% of rest\n", bunching * 100);
     check("the border never bunches", bunching >= 0.5);
+    // Nor zigzags: the water adds 30 degrees or less of turn at any point (a sawtooth adds 60 or more).
+    std::printf("most turn the water adds along the border: %.0f degrees\n", sharpest);
+    check("the border never zigzags", sharpest <= 30);
     check("reduced motion: still at rest", rest == 0);
     return failures ? 1 : 0;
 }

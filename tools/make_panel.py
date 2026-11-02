@@ -125,7 +125,17 @@ for family in range(2):
 # --- The face (floor units) ----------------------------------------------------
 # A round smiley painted on the floor: a circle, a wide smile with upturned
 # corners, and two tall eyes drawn as outlines.
-border = [(0.6 * math.cos(2 * math.pi * i / 64 + 0.05), 0.6 * math.sin(2 * math.pi * i / 64 + 0.05)) for i in range(64)]
+# Its 64 points are spaced evenly along the ellipse it makes on screen, so the
+# narrow ends get segments as long as the rest and stay smooth when bent.
+_fine = [(0.6 * math.cos(2 * math.pi * k / 4096 + 0.05), 0.6 * math.sin(2 * math.pi * k / 4096 + 0.05)) for k in range(4096)]
+_screen = [(S * u, S * K * v) for u, v in _fine]
+_lengths = [math.dist(_screen[k], _screen[(k + 1) % 4096]) for k in range(4096)]
+_total, _walk, border = sum(_lengths), 0.0, []
+for k in range(4096):
+    if _walk >= _total * len(border) / 64:
+        border.append(_fine[k])
+    _walk += _lengths[k]
+assert len(border) == 64
 # The smile's centre line: 30 points of arc with an upturned tick at each
 # corner, all one outline so the corners bend with the water.
 arc = []
@@ -175,7 +185,58 @@ outline = lambda shape, eye: [turn(du if eye == 0 else -du, dv) for du, dv in sh
 ovals = [outline(eye_oval, e) for e in range(2)]
 bolts = [outline(eye_bolt, e) for e in range(2)]
 # Pseudo-random pits for the pH corrosion, -1..1: alternating, so the line goes jagged.
-pits = [((-1) ** i) * (0.45 + 0.55 * abs(math.sin(i * 12.9898) * 43758.5453 % 1)) for i in range(64)]
+# Corrosion lumps for the pH, -1..1 along the border: two slow waves (12 and 7
+# a turn), so the line goes lumpy, never a point-to-point sawtooth.
+pits = [0.55 * math.sin(2 * math.pi * 12 * i / 64 + 1.0) + 0.45 * math.sin(2 * math.pi * 7 * i / 64 + 2.0) for i in range(64)]
+
+# The raindrop: a teardrop outline (pointed top, round bowl), about 10 x 18 px,
+# cut into five horizontal bands like a glitched poster. Each piece is one thin
+# closed ribbon: the tip, the left and right edges of three middle bands, and
+# the bowl. Tilted 25 degrees, so it falls at an angle.
+DROP_TILT = math.radians(25)
+BANDS = [-9.0, -4.5, -1.0, 2.5, 6.0, 9.5]
+
+
+def teardrop(t):
+    return 6.5 * math.sin(t) * math.sin(t / 2), -9.0 * math.cos(t)
+
+
+def band_of(y):
+    return max(0, min(4, sum(1 for b in BANDS[1:-1] if y >= b)))
+
+
+samples = [teardrop(2 * math.pi * k / 720) for k in range(721)]
+right = [pt for k, pt in enumerate(samples) if k <= 360]   # tip down the right to the bottom
+left = [pt for k, pt in enumerate(samples) if k >= 360][::-1]  # tip down the left to the bottom
+pieces = []  # (band, polyline)
+for band in range(5):
+    r = [pt for pt in right if band_of(pt[1]) == band]
+    l = [pt for pt in left if band_of(pt[1]) == band]
+    if band == 0:
+        tip = [pt for pt in l if pt[1] > -8.4][::-1] + [pt for pt in r if pt[1] > -8.4]  # a flat tip, not a needle
+        pieces.append((band, tip))
+    elif band == 4:
+        pieces.append((band, r + l[::-1]))
+    else:
+        pieces.append((band, l))
+        pieces.append((band, r))
+
+
+def thin(polyline, most):
+    step = max(1, math.ceil(len(polyline) / most))
+    kept = polyline[::step]
+    return kept if kept[-1] == polyline[-1] else kept + [polyline[-1]]
+
+
+def tilt(pt):
+    x, y = pt
+    c, s_ = math.cos(DROP_TILT), math.sin(DROP_TILT)
+    return x * c - y * s_, x * s_ + y * c
+
+
+# Edges 0.3 px apart, so the stroke covers the gap; the node draws it at 1.5x.
+drop_pieces = [(band, [tilt(pt) for pt in ribbon(thin(line, 14), 0.15)]) for band, line in pieces]
+assert len(drop_pieces) == 8
 
 # Half-size pixel offsets (the face's nodes sit at scale 2 on its centre).
 half = lambda u, v: (S * u / 2, S * K * v / 2)
@@ -191,8 +252,8 @@ CROWN, DROPLETS = 10, 6       # per splash; 6 droplets, not 11, keep the redraw 
 SPLASH_NODES = 2 * (CROWN + DROPLETS)
 LANE = SPLASH + SPLASH_NODES
 LANE_NODES = 49
-FOAM = LANE + LANE_NODES       # 24 flecks of froth, drawn over the face
-NODES = FOAM + 24
+RAINDROP = LANE + LANE_NODES   # the raindrop's 8 pieces, drawn over the face
+NODES = RAINDROP + len(drop_pieces)
 assert NODES <= 224, NODES
 
 SEGMENT = 32.0  # a grid segment's authored length; its node scales it to the joints
@@ -230,10 +291,9 @@ out.append(f'<path id="acidrain_node_1" transform="matrix(1 0 0 1 {fmt(cx)} {fmt
 for i, (u, v) in enumerate(eyes):
     points = [half(u + du, v + dv) for du, dv in ovals[i]]
     out.append(f'<path id="acidrain_node_{2 + i}" transform="matrix(1 0 0 1 {fmt(cx)} {fmt(cy)})" d="{path_d(points)}" fill="none" stroke="#B4B4B4" stroke-width="{fmt(EYES / 2)}"{join}/>')
-out.append("<!-- Froth floating on the water, over the face. -->")
-for i in range(24):
-    radius = 1.0 if i % 2 == 0 else 1.5  # 2 and 3 px flecks
-    out.append(f'<circle id="acidrain_node_{FOAM + i}" transform="matrix(1 0 0 1 640 320)" cx="0" cy="0" r="{fmt(radius)}" fill="#C8C8C8" stroke="#C8C8C8" stroke-width="0.5"/>')
+out.append("<!-- The raindrop, falling onto the water over the face. -->")
+for i, (band, piece) in enumerate(drop_pieces):
+    out.append(f'<path id="acidrain_node_{RAINDROP + i}" transform="matrix(1 0 0 1 640 320)" d="{path_d(piece)}" fill="none" stroke="#C8C8C8" stroke-width="0.5"/>')
 square = path_d([(-2, -2), (2, -2), (2, 2), (-2, 2)])
 bar = path_d([(-20, -1.5), (0, -1.5), (0, 1.5), (-20, 1.5)])
 dash = path_d([(-4, -1), (4, -1), (4, 1), (-4, 1)])
@@ -283,7 +343,9 @@ const i32 centre_x = {q10(cx)}, centre_y = {q10(cy)};  // the face, Q10 px
 const u32_t_placeholder = 0;
 const i32 segment = {int(SEGMENT)};       // a grid segment's authored length, px
 const unsigned header = {HEADER}, grid = {GRID};
-const unsigned splash = {SPLASH}, lane = {LANE}, foam = {FOAM};
+const unsigned splash = {SPLASH}, lane = {LANE}, raindrop = {RAINDROP};
+// Which band each raindrop piece belongs to: a band's pieces tear together.
+{row("drop_band", "u8", [band for band, piece in drop_pieces])}
 const unsigned crown = {CROWN}, droplets = {DROPLETS};  // pixels per splash
 const unsigned joint_count = {len(J)}, segment_count = {len(segments)};
 
