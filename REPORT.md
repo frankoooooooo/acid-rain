@@ -90,8 +90,13 @@ the feedback highpass from 150 to 400 Hz moved the 40-160 Hz share by under
 | Setting | Nodes changed a frame, average | Peak | At rest |
 | --- | --- | --- | --- |
 | Defaults | 15.0 | 18 | 0 |
-| Heaviest (reso, env mod, decay 2.0 s, dew 100, pH 2, accent auto, slide on) | 17.7 | 36 | 0 |
-| Reduced motion | 0.7 | 7 | 0 |
+| Heaviest (reso, env mod, decay 2.0 s, dew 100, pH 2, accent auto, slide on) | 17.5 | 33 | 0 |
+| Reduced motion | 0.6 | 5 | 0 |
+
+The face is four outlines (border, smile, two eyes), each redrawn as one node.
+The water moves a face point at most 4 px and a grid joint 8 px however many
+drops overlap, so the smile and eyes stay at least 7.3 px inside the border
+(checked over the heaviest run).
 
 To stay near 20: ripples reach less far, about 12 grid segments and splash
 pixels redraw a frame (the joints furthest out of place first, the rest catch
@@ -99,7 +104,8 @@ up), a cluster of rain splashes once, and a splash throws 6 droplets, not 11.
 The face's two outlines carry most of the water's motion: each redraws as one
 node however many points move.
 
-Every control at 0, 50 and 100 changes the picture (contact sheet in
+Every control at 0, 50 and 100 changes the picture, the four sound controls
+subtly since the ripples were made smaller (reso least) (contact sheet in
 `acid-rain-work/frames/contact.png`, not committed). Dew is the subtlest: it
 shows only as how often splashes and bolt eyes come.
 

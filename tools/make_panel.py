@@ -9,12 +9,13 @@ The floor is a plane seen from above at a slant: floor units (u, v) map to the
 screen as x = 240 + S u, y = Y0 + S K v. Ripples are circles on the floor.
 """
 import math
+import re
 import pathlib
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 S, K, Y0 = 160.0, 0.42, 116.0     # pixels per floor unit, slant, the face's centre
 LATTICE = 0.344                  # floor spacing between parallel grid lines
-WEIGHT = 5                       # build constant: the face line, 2.92, 5 (Bold) or 8 px
+WEIGHT = 8                       # build constant: the face line, 2.92, 5 or 8 px (bold, as on a rave poster)
 TOP, BOTTOM = 40.0, 220.0        # the grid's band, below the two-page header
 CENTRE = 5                       # moving joints: |m + n| <= CENTRE and |m - n| <= CENTRE
 
@@ -120,26 +121,43 @@ for family in range(2):
             static_lines.append(run)
 
 # --- The face (floor units) ----------------------------------------------------
-def border_radius(theta):
-    # A hand-drawn blob, not an ellipse: a few slow harmonics.
-    return 0.6 * (1 + 0.07 * math.sin(2 * theta + 0.6) + 0.06 * math.sin(3 * theta + 1.0)
-                  + 0.035 * math.sin(5 * theta + 2.2) + 0.02 * math.sin(7 * theta + 0.3))
-
-
-border = []
-for i in range(64):
-    th = 2 * math.pi * i / 64 + 0.05
-    r = border_radius(th)
-    border.append((r * math.cos(th), 1.25 * r * math.sin(th)))  # taller than round, as drawn
+# A round smiley painted on the floor: a circle, a wide smile with upturned
+# corners, and two tall eyes drawn as outlines.
+border = [(0.6 * math.cos(2 * math.pi * i / 64 + 0.05), 0.6 * math.sin(2 * math.pi * i / 64 + 0.05)) for i in range(64)]
 # The smile's centre line: 30 points of arc with an upturned tick at each
 # corner, all one outline so the corners bend with the water.
 arc = []
 for i in range(30):
-    th = math.radians(28 + (152 - 28) * i / 29)
-    arc.append((0.5 * math.cos(th), -0.2 + 0.5 * math.sin(th)))
-tick = lambda end, sign: (end[0] + sign * 0.03, end[1] - 0.16)  # up and a little outward, floor units
+    th = math.radians(20 + (160 - 20) * i / 29)
+    arc.append((0.38 * math.cos(th), -0.05 + 0.38 * math.sin(th)))
+tick = lambda end, sign: (end[0] + sign * 0.03, end[1] - 0.12)  # up and a little outward, floor units
 smile = [tick(arc[0], 1)] + arc + [tick(arc[-1], -1)]
-eyes = [(-0.24, -0.27), (0.24, -0.27)]
+eyes = [(-0.2, -0.22), (0.2, -0.22)]
+
+
+def resample(polygon, count):
+    """`count` points evenly along a closed polygon's perimeter, from its first point."""
+    edges = [(polygon[i], polygon[(i + 1) % len(polygon)]) for i in range(len(polygon))]
+    lengths = [math.dist(a, b) for a, b in edges]
+    total, points, at, start = sum(lengths), [], 0, 0.0
+    for k in range(count):
+        d = total * k / count
+        while d > start + lengths[at] and at < len(edges) - 1:
+            start += lengths[at]
+            at += 1
+        (ax, ay), (bx, by) = edges[at]
+        t = (d - start) / lengths[at]
+        points.append((ax + (bx - ax) * t, ay + (by - ay) * t))
+    return points
+
+
+# An eye at rest: a tall oval, 13 x 16 px on screen, clockwise from its top.
+eye_oval = [(0.04 * math.sin(2 * math.pi * i / 64), -0.12 * math.cos(2 * math.pi * i / 64)) for i in range(64)]
+# On an accent it morphs into a bolt: a thin outline around a zigzag line, so
+# the bold stroke draws a crisp lightning stroke (screen px about the eye's
+# centre; every turn well away from straight back).
+zigzag = [(4.5, -10), (-2.5, -1.5), (3.0, 1.5), (-4.5, 10)]
+eye_bolt = [(x / S, y / (S * K)) for x, y in resample(ribbon(zigzag, 0.4), 64)]
 # Pseudo-random pits for the pH corrosion, -1..1: alternating, so the line goes jagged.
 pits = [((-1) ** i) * (0.45 + 0.55 * abs(math.sin(i * 12.9898) * 43758.5453 % 1)) for i in range(64)]
 
@@ -149,9 +167,9 @@ smile_half = [half(u, v) for u, v in smile]
 smile_edges = ribbon(smile_half, 0.3)
 
 # --- Nodes ---------------------------------------------------------------------
-HEADER = 2
-OVALS, BOLTS = 10, 12
-GRID = 14
+PATHS = 4                     # border, smile and two eyes: nodes 0..3
+HEADER = PATHS
+GRID = HEADER + 8
 SPLASH = GRID + len(segments)
 CROWN, DROPLETS = 10, 6       # per splash; 6 droplets, not 11, keep the redraw near 20 nodes
 SPLASH_NODES = 2 * (CROWN + DROPLETS)
@@ -169,6 +187,12 @@ palette = [  # fill, stroke width
 
 header_block = (ROOT / "panel.svg.fragment").read_text().split("<!-- SDK two-page header")[1]
 header_block = "<!-- SDK two-page header" + header_block.split("\n\n")[0]
+# The header's eight bar nodes follow the paths (the generated block names 2..9 first).
+bars = re.findall(r'acidrain_node_(\d+)"', header_block)
+for k, old in enumerate(bars):
+    header_block = header_block.replace(f'acidrain_node_{old}"', f'acidrain_node_bar{k}"')
+for k in range(len(bars)):
+    header_block = header_block.replace(f'acidrain_node_bar{k}"', f'acidrain_node_{HEADER + k}"')
 
 out = ['<g id="acidrain_panel">', header_block.rstrip(), "", "<!-- The floor's still grid; the centre's segments are nodes. -->"]
 for line in static_lines:
@@ -186,22 +210,9 @@ out.append(f'<path id="acidrain_node_0" transform="matrix(1 0 0 1 {fmt(cx)} {fmt
 out.append(f'<path id="acidrain_node_1" transform="matrix(1 0 0 1 {fmt(cx)} {fmt(cy)})" d="{path_d(smile_edges)}" fill="none" stroke="#B4B4B4" stroke-width="{fmt((WEIGHT - 1) / 2)}"{join}/>')
 
 
-def oval():
-    return [(3.6 * math.cos(2 * math.pi * i / 16), 5.2 * math.sin(2 * math.pi * i / 16)) for i in range(16)]
-
-
-def bolt():
-    # A lightning bolt as one filled outline with flat tips, about 22 px tall.
-    return [(-4.5, -11), (3.5, -11), (0.5, -2.5), (5.5, -2.5), (-2.5, 11), (-4.5, 11), (-1.0, 1.5), (-6.0, 1.5)]
-
-
 for i, (u, v) in enumerate(eyes):
-    x, y = screen(u, v)
-    out.append(f'<path id="acidrain_node_{OVALS + i}" transform="matrix(1 0 0 1 {fmt(x)} {fmt(y)})" d="{path_d(oval())}" fill="#B4B4B4" stroke="#B4B4B4" stroke-width="0.5"/>')
-for i, (u, v) in enumerate(eyes):
-    x, y = screen(u, v)
-    shape = bolt() if i == 0 else [(-px, py) for px, py in bolt()][::-1]
-    out.append(f'<path id="acidrain_node_{BOLTS + i}" transform="matrix(1 0 0 1 640 320)" d="{path_d(shape)}" fill="#000000" stroke="#000000" stroke-width="0.5"/>')
+    points = [half(u + (du if i == 0 else -du), v + dv) for du, dv in eye_oval]  # the right eye mirrors the left
+    out.append(f'<path id="acidrain_node_{2 + i}" transform="matrix(1 0 0 1 {fmt(cx)} {fmt(cy)})" d="{path_d(points)}" fill="none" stroke="#B4B4B4" stroke-width="{fmt((WEIGHT - 1) / 2)}"{join}/>')
 square = path_d([(-2, -2), (2, -2), (2, 2), (-2, 2)])
 bar = path_d([(-20, -1.5), (0, -1.5), (0, 1.5), (-20, 1.5)])
 dash = path_d([(-4, -1), (4, -1), (4, 1), (-4, 1)])
@@ -250,7 +261,7 @@ const i32 slant = {q10(K)};           // and down, Q10 of that
 const i32 centre_x = {q10(cx)}, centre_y = {q10(cy)};  // the face, Q10 px
 const u32_t_placeholder = 0;
 const i32 segment = {int(SEGMENT)};       // a grid segment's authored length, px
-const unsigned header = {HEADER}, ovals = {OVALS}, bolts = {BOLTS}, grid = {GRID};
+const unsigned header = {HEADER}, grid = {GRID};
 const unsigned splash = {SPLASH}, lane = {LANE};
 const unsigned crown = {CROWN}, droplets = {DROPLETS};  // pixels per splash
 const unsigned joint_count = {len(J)}, segment_count = {len(segments)};
@@ -275,6 +286,12 @@ const unsigned joint_count = {len(J)}, segment_count = {len(segments)};
 {row("smile_dy", "i32", [q10(smile_edges[i][1] - smile_half[i][1]) for i in range(32)])}
 {row("eye_u", "i32", [q10(u) for u, v in eyes])}
 {row("eye_v", "i32", [q10(v) for u, v in eyes])}
+// The left eye's outline about its centre, floor Q10: the oval at rest, the bolt
+// on an accent. The right eye mirrors it (u negated, order kept).
+{row("oval_u", "i32", [q10(u) for u, v in eye_oval])}
+{row("oval_v", "i32", [q10(v) for u, v in eye_oval])}
+{row("bolt_u", "i32", [q10(u) for u, v in eye_bolt])}
+{row("bolt_v", "i32", [q10(v) for u, v in eye_bolt])}
 
 // e^-(i / 8), Q15; 2^(i / 32), Q14; 64 / ((i + 0.5) / 64 units) as Q10 per unit.
 {row("exp_neg", "i32", exp_neg)}

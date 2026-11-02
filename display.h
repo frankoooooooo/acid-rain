@@ -4,7 +4,7 @@
 
 namespace acidrain {
 // Matches resources.display in definition.json: paths, points, nodes, texts, palette.
-using Frame = opxy::draw::Frame<2, 64, 195, 16, 8>;
+using Frame = opxy::draw::Frame<4, 64, 193, 16, 8>;
 
 // A drop on the water: its centre (floor Q10 units), where a slide drags it
 // from, its age (Q10 s), strength (Q10) and ring tightness (0: the cutoff's).
@@ -31,7 +31,7 @@ struct DisplayState {
     opxy::u32 splash_cost;     // splash pixels moved last frame
     opxy::u8 lane[16];
     opxy::i32 joint_x[61], joint_y[61];         // as last placed, Q10 px
-    opxy::i32 border[64][2], smile[32][2];      // as last placed, Q10 px
-    opxy::u32 border_key, smile_key;
+    opxy::i32 border[64][2], smile[32][2], eyes[2][64][2];  // the face's outlines as last placed, Q10 px
+    opxy::u32 keys[4];                          // their path keys
 };
 }

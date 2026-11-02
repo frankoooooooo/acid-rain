@@ -40,6 +40,20 @@ static bool same(const opxy::draw::Node& a, const opxy::draw::Node& b) { return 
 
 // Plays sixteenths at 120 bpm at 30 frames a second with these slots, then
 // rests. Returns the average and peak nodes changed per frame while playing.
+// The closest any smile or eye point comes to the border, in pixels squared.
+static long long closest(const DisplayState& state) {
+    long long best = 1LL << 40;
+    for (u32 b = 0; b < 64; ++b)
+        for (u32 k = 0; k < 32 + 128; ++k) {
+            const i32* q = k < 32 ? state.smile[k] : state.eyes[(k - 32) / 64][(k - 32) % 64];
+            const long long dx = (q[0] - state.border[b][0]) >> 10, dy = (q[1] - state.border[b][1]) >> 10;
+            best = dx * dx + dy * dy < best ? dx * dx + dy * dy : best;
+        }
+    return best;
+}
+
+static long long nearest = 1LL << 40;  // over every frame played
+
 static void play(const char* name, const i32 (&slots)[8], double& average, u32& peak, u32& at_rest, bool reduced = false) {
     static DisplayState state;
     static Screen frame, last;
@@ -77,6 +91,8 @@ static void play(const char* name, const i32 (&slots)[8], double& average, u32& 
             ++failures;
             return;
         }
+        const long long gap = closest(state);
+        nearest = gap < nearest ? gap : nearest;
         if (n == 0) continue;
         u32 count = 0;
         for (u32 i = 0; i < Screen::node_count; ++i) count += !same(frame.nodes[i], last.nodes[i]);
@@ -106,6 +122,9 @@ int main() {
     check("heaviest: about 20 nodes a frame or fewer", average <= 22);
     check("heaviest: still at rest", rest == 0);
     play("reduced motion", heaviest, average, peak, rest, true);
+    // The face's lines never meet: smile and eyes stay 3 px or more inside the border.
+    std::printf("closest approach of smile or eye to the border: %.1f px\n", __builtin_sqrt(static_cast<double>(nearest)));
+    check("the face's lines never meet", nearest >= 9);
     check("reduced motion: still at rest", rest == 0);
     return failures ? 1 : 0;
 }

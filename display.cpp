@@ -21,7 +21,11 @@ const i32 lane_left = 60 * unit, lane_step = 24 * unit, lane_y = 205 * unit;
 const i32 hold = 461;                    // the eyes hold as bolts for 0.15 s + 0.3 s
 const u32 ripple_turn = 154;
 const i32 reach = 63 * unit;              // a path's points stay within 64 px of its node (x 2 on screen)
-const i32 face_gain = 3;                 // the face's line bends three times as far as the grid may
+// The water moves a face point at most 4 px and a grid joint 8 px, however
+// many drops overlap: the face's lines, 12 px apart or more (9 under a bolt),
+// never meet, and neighbouring joints never fold over.
+const i32 face_reach_u = 26, face_reach_v = 61;    // 4 px, floor Q10 units
+const i32 grid_reach = 8 * unit;                    // Q10 px
 const u32 frame_budget = 12;             // grid segments and splash pixels redrawn a frame, about
 const u8 lane_used = 1, lane_accented = 2, lane_slid = 4, lane_auto = 8;
 
@@ -165,6 +169,29 @@ static inline void shift(const DisplayState& state, const Water& w, const i32 (&
     }
 }
 
+// The water's shift at a point of the face, held to 5 px.
+static inline void face_shift(const DisplayState& state, const Water& w, const i32 (&peak)[drop_count],
+                              const i32 (&train)[drop_count], const i32 (&inverse)[drop_count], const i32 (&turns)[drop_count],
+                              i32 u, i32 v, i32& du, i32& dv) {
+    shift(state, w, peak, train, inverse, turns, u, v, du, dv);
+    du = clamp(du, -face_reach_u, face_reach_u);
+    dv = clamp(dv, -face_reach_v, face_reach_v);
+}
+
+// Takes an outline's new points (Q10 px) when any moved half a pixel or more,
+// snapped to half pixels; true when it changed, so its path redraws.
+static inline bool commit(i32 (*placed)[2], const i32 (*points)[2], u32 count, bool fresh) {
+    bool moved = fresh;
+    for (u32 i = 0; i < count && !moved; ++i)
+        moved = magnitude(points[i][0] - placed[i][0]) >= 512 || magnitude(points[i][1] - placed[i][1]) >= 512;
+    if (moved)
+        for (u32 i = 0; i < count; ++i) {
+            placed[i][0] = snap(points[i][0]);
+            placed[i][1] = snap(points[i][1]);
+        }
+    return moved;
+}
+
 static inline Drop& add_drop(DisplayState& state, i32 u, i32 v, i32 strength, i32 tight) {
     // Take a free slot, or the oldest.
     u32 slot = drop_count;
@@ -208,8 +235,7 @@ static inline void restart(DisplayState& state, const Input& input) {
     state.since_turn = 10 * second;
     for (u32 i = 0; i < splash_count; ++i) state.splashes[i].age = -1;
     for (u32 i = 0; i < 4; ++i) state.knobs[i] = input.slots[i];
-    state.border_key = 1;
-    state.smile_key = 1;
+    for (u32 i = 0; i < 4; ++i) state.keys[i] = 1;
 }
 
 // --- The frame -----------------------------------------------------------------
@@ -253,7 +279,7 @@ inline void display(DisplayState& state, const Input& input, Frame& frame) {
         const i32 angle = static_cast<i32>(h & 255), radius = static_cast<i32>((h >> 8 & 1023) * 440 >> 10);
         const i32 u = (s::wave[(angle + 64) & 255] * radius) >> 10, v = (s::wave[angle] * radius) >> 10;
         if (!still) {
-            Drop& drop = add_drop(state, u, v, accented ? 1331 : 1024, 0);
+            Drop& drop = add_drop(state, u, v, 1024, 0);  // every note alike: accents show in the eyes and splash
             if (sl == 1 && n + state.head) {  // a slide drags the drop from the last one
                 drop.from_u = state.last_u;
                 drop.from_v = state.last_v;
@@ -324,9 +350,9 @@ inline void display(DisplayState& state, const Input& input, Frame& frame) {
         peak[d] = 0;
         if (!drop.strength) continue;
         const i32 tight = drop.tight ? drop.tight : w.tight;
-        // Ring height: refraction x amplitude x tightness, capped at 24 px; then env mod.
-        i32 p = (8 * tight * drop.strength) >> 10;
-        if (p > 154) p = 154;
+        // Ring height: refraction x amplitude x tightness, capped at 12 px; then env mod.
+        i32 p = (4 * tight * drop.strength) >> 10;
+        if (p > 77) p = 77;
         peak[d] = (p * w.height) >> 10;
         train[d] = 6434 * w.rings / (tight * 1024);  // the rings' wavelength 2 pi / k, times their count
         if (train[d] < 64) train[d] = 64;
@@ -345,58 +371,39 @@ inline void display(DisplayState& state, const Input& input, Frame& frame) {
         }
     }
 
-    // The face's two outlines share their pivot: the face's centre,
-    // which stays put while the water moves their points.
+    // The face's four outlines share their pivot: the face's centre, which
+    // stays put while the water moves their points.
     i32 du, dv;
     const i32 px = snap(s::centre_x), py = snap(s::centre_y);
-    const bool pivot_moved = fresh;
 
     // The border: refracted, and pitted where the water moves it as the pH
     // falls (up to 3 px). At rest it is smooth.
-    bool border_moved = fresh || pivot_moved;
     i32 points[64][2];
     for (u32 i = 0; i < 64; ++i) {
-        shift(state, w, peak, train, inverse, turns, s::border_u[i], s::border_v[i], du, dv);
-        du *= face_gain;
-        dv *= face_gain;
-        const i32 moving = clamp(magnitude(du) + magnitude(dv), 0, 32) * 32;  // Q10: 1 once it moves 5 px
+        face_shift(state, w, peak, train, inverse, turns, s::border_u[i], s::border_v[i], du, dv);
+        const i32 moving = clamp(magnitude(du) + magnitude(dv), 0, 32) * 32;  // Q10: 1 once it moves about 4 px
         const i32 pit = (((s::pits[i] * acid) >> 10) * moving) >> 10;  // Q10, -1..1
         const i32 u = s::border_u[i] + du + ((s::border_u[i] * pit) >> 10) * 3 / 99;
         const i32 v = s::border_v[i] + dv + ((s::border_v[i] * pit) >> 10) * 3 / 99;
-        i32 x, y;
-        screen_point(u, v, 0, 0, x, y);
-        points[i][0] = x;
-        points[i][1] = y;
-        if (magnitude(x - state.border[i][0]) >= 512 || magnitude(y - state.border[i][1]) >= 512) border_moved = true;
+        screen_point(u, v, 0, 0, points[i][0], points[i][1]);
     }
-    if (border_moved) {
-        state.border_key = state.border_key % 0xfffffff0u + 1;
-        frame.paths[0].key = state.border_key;
+    if (commit(state.border, points, 64, fresh)) {
+        state.keys[0] = state.keys[0] % 0xfffffff0u + 1;
+        frame.paths[0].key = state.keys[0];
         for (u32 i = 0; i < 64; ++i) {
-            state.border[i][0] = snap(points[i][0]);
-            state.border[i][1] = snap(points[i][1]);
             frame.paths[0].points[i].x = clamp((state.border[i][0] - px) >> 1, -reach, reach);
             frame.paths[0].points[i].y = clamp((state.border[i][1] - py) >> 1, -reach, reach);
         }
     }
     // The smile: a thin ribbon around its refracted centre line.
-    bool smile_moved = fresh || pivot_moved;
     for (u32 i = 0; i < 32; ++i) {
-        shift(state, w, peak, train, inverse, turns, s::smile_u[i], s::smile_v[i], du, dv);
-        du *= face_gain;
-        dv *= face_gain;
-        i32 x, y;
-        screen_point(s::smile_u[i], s::smile_v[i], du, dv, x, y);
-        points[i][0] = x;
-        points[i][1] = y;
-        if (magnitude(x - state.smile[i][0]) >= 512 || magnitude(y - state.smile[i][1]) >= 512) smile_moved = true;
+        face_shift(state, w, peak, train, inverse, turns, s::smile_u[i], s::smile_v[i], du, dv);
+        screen_point(s::smile_u[i], s::smile_v[i], du, dv, points[i][0], points[i][1]);
     }
-    if (smile_moved) {
-        state.smile_key = state.smile_key % 0xfffffff0u + 1;
-        frame.paths[1].key = state.smile_key;
+    if (commit(state.smile, points, 32, fresh)) {
+        state.keys[1] = state.keys[1] % 0xfffffff0u + 1;
+        frame.paths[1].key = state.keys[1];
         for (u32 i = 0; i < 32; ++i) {
-            state.smile[i][0] = snap(points[i][0]);
-            state.smile[i][1] = snap(points[i][1]);
             const i32 x = clamp((state.smile[i][0] - px) >> 1, -reach, reach), y = clamp((state.smile[i][1] - py) >> 1, -reach, reach);
             frame.paths[1].points[i].x = x + s::smile_dx[i];
             frame.paths[1].points[i].y = y + s::smile_dy[i];
@@ -404,30 +411,34 @@ inline void display(DisplayState& state, const Input& input, Frame& frame) {
             frame.paths[1].points[63 - i].y = y - s::smile_dy[i];
         }
     }
-    if (pivot_moved) {
-        place(frame, 0, px, py, 2 * unit, line, stroke);
-        place(frame, 1, px, py, 2 * unit, smile_line, stroke);
-    }
 
-    // The eyes: ovals that ease into bolts on an accent, hold, then ease back.
+    // The eyes: outlines of tall ovals that morph into bolts on an accent,
+    // easing over 0.15 s, hold, then ease back. The right eye mirrors the left.
     state.since_accent += dt;
     const i32 target = state.since_accent < hold ? unit : 0;
     if (still || fresh) state.bolt = target;
     else state.bolt += ((target - state.bolt) * (dt > 154 ? 1024 : dt * 1024 / 51 > 1024 ? 1024 : dt * 1024 / 51)) >> 10;
     if (magnitude(target - state.bolt) < 16) state.bolt = target;
     for (u32 e = 0; e < 2; ++e) {
-        shift(state, w, peak, train, inverse, turns, s::eye_u[e], s::eye_v[e], du, dv);
-        i32 x, y;
-        screen_point(s::eye_u[e], s::eye_v[e], du, dv, x, y);
-        x = snap(x);
-        y = snap(y);
-        const i32 b = state.bolt;
-        const u32 oval = b < 256 ? face : b < 512 ? mid : b < 768 ? dim : black;
-        const u32 bolt = b > 768 ? face : b > 512 ? mid : b > 256 ? dim : black;
-        if (oval == black) hide(frame, s::ovals + e);
-        else place(frame, s::ovals + e, x, y, unit, oval, fill_and_stroke);
-        if (bolt == black) hide(frame, s::bolts + e);
-        else place(frame, s::bolts + e, x, y, unit, bolt, fill_and_stroke);
+        for (u32 i = 0; i < 64; ++i) {
+            const i32 a = s::oval_u[i] + (((s::bolt_u[i] - s::oval_u[i]) * state.bolt) >> 10);
+            const i32 u = s::eye_u[e] + (e ? -a : a);
+            const i32 v = s::eye_v[e] + s::oval_v[i] + (((s::bolt_v[i] - s::oval_v[i]) * state.bolt) >> 10);
+            face_shift(state, w, peak, train, inverse, turns, u, v, du, dv);
+            screen_point(u, v, du, dv, points[i][0], points[i][1]);
+        }
+        if (commit(state.eyes[e], points, 64, fresh)) {
+            state.keys[2 + e] = state.keys[2 + e] % 0xfffffff0u + 1;
+            frame.paths[2 + e].key = state.keys[2 + e];
+            for (u32 i = 0; i < 64; ++i) {
+                frame.paths[2 + e].points[i].x = clamp((state.eyes[e][i][0] - px) >> 1, -reach, reach);
+                frame.paths[2 + e].points[i].y = clamp((state.eyes[e][i][1] - py) >> 1, -reach, reach);
+            }
+        }
+    }
+    if (fresh) {
+        place(frame, 0, px, py, 2 * unit, line, stroke);
+        for (u32 n = 1; n < 4; ++n) place(frame, n, px, py, 2 * unit, smile_line, stroke);
     }
 
     // The grid's centre: each joint refracted, each segment turned and scaled
@@ -440,10 +451,8 @@ inline void display(DisplayState& state, const Input& input, Frame& frame) {
         i32 x = s::joint_x[j], y = s::joint_y[j];
         if (!s::joint_rim[j]) {
             shift(state, w, peak, train, inverse, turns, s::joint_u[j], s::joint_v[j], du, dv);
-            // A joint moves at most 12 px, under half the 27 px between
-            // joints, so neighbours never fold over each other.
-            x += clamp(du * s::scale, -12 * unit, 12 * unit);
-            y += clamp((dv * s::scale) * s::slant >> 10, -12 * unit, 12 * unit);
+            x += clamp(du * s::scale, -grid_reach, grid_reach);
+            y += clamp((dv * s::scale) * s::slant >> 10, -grid_reach, grid_reach);
         }
         want_x[j] = x;
         want_y[j] = y;
