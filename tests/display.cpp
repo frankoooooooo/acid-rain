@@ -117,6 +117,8 @@ static void play(const char* name, const i32 (&slots)[8], double& average, u32& 
             at_rest += count;  // the last second: even decay 2.0's rings (about 6 s) have settled
         }
     }
+    for (u32 i = 0; i < 24; ++i)
+        if (state.foam[i].life) { std::printf("FAIL %s: froth still floating at rest\n", name); ++failures; break; }
     average = frames ? static_cast<double>(changed) / frames : 0;
     std::printf("%s: %.1f nodes a frame while playing, peak %u, %u in the last second of rest\n", name, average, peak, at_rest);
 }

@@ -89,16 +89,19 @@ the feedback highpass from 150 to 400 Hz moved the 40-160 Hz share by under
 
 | Setting | Nodes changed a frame, average | Peak | At rest |
 | --- | --- | --- | --- |
-| Defaults | 15.0 | 18 | 0 |
-| Heaviest (reso, env mod, decay 2.0 s, dew 100, pH 2, accent auto, slide on) | 17.5 | 33 | 0 |
+| Defaults | 16.4 | 20 | 0 |
+| Heaviest (reso, env mod, decay 2.0 s, dew 100, pH 2, accent auto, slide on) | 21.0 | 37 | 0 |
 | Reduced motion | 0.6 | 5 | 0 |
 
 The face is four outlines (border, smile, two eyes), each redrawn as one node.
-The water moves a face point at most 4 px and a grid joint 8 px however many
-drops overlap, so the smile and eyes stay at least 4.5 px inside the border
-(checked over the heaviest run). The border moves only across its line and
-each outline's shift is smoothed over neighbouring points, so its points never
-bunch: neighbours keep at least 67% of their spacing at rest (34% before).
+One refraction field moves the floor and the face alike, at most 5 px however
+many drops overlap, so the smile and eyes stay at least 7.1 px inside the
+border (checked over the heaviest run). Each drop has its own ring tightness,
+height and phase and two late satellite drops, so rings interfere unevenly.
+A spacing guard keeps neighbouring outline points at 58% or more of their
+resting spacing, so lines kink where crests cross but never bunch. Froth (24
+flecks, at most 6 moved a frame) floats on the surface over the face and pops
+within 1.2 s; it shares the per-frame budget with the splash and the grid.
 
 To stay near 20: ripples reach less far, about 12 grid segments and splash
 pixels redraw a frame (the joints furthest out of place first, the rest catch

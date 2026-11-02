@@ -191,7 +191,8 @@ CROWN, DROPLETS = 10, 6       # per splash; 6 droplets, not 11, keep the redraw 
 SPLASH_NODES = 2 * (CROWN + DROPLETS)
 LANE = SPLASH + SPLASH_NODES
 LANE_NODES = 49
-NODES = LANE + LANE_NODES
+FOAM = LANE + LANE_NODES       # 24 flecks of froth, drawn over the face
+NODES = FOAM + 24
 assert NODES <= 224, NODES
 
 SEGMENT = 32.0  # a grid segment's authored length; its node scales it to the joints
@@ -229,6 +230,10 @@ out.append(f'<path id="acidrain_node_1" transform="matrix(1 0 0 1 {fmt(cx)} {fmt
 for i, (u, v) in enumerate(eyes):
     points = [half(u + du, v + dv) for du, dv in ovals[i]]
     out.append(f'<path id="acidrain_node_{2 + i}" transform="matrix(1 0 0 1 {fmt(cx)} {fmt(cy)})" d="{path_d(points)}" fill="none" stroke="#B4B4B4" stroke-width="{fmt(EYES / 2)}"{join}/>')
+out.append("<!-- Froth floating on the water, over the face. -->")
+for i in range(24):
+    radius = 1.0 if i % 2 == 0 else 1.5  # 2 and 3 px flecks
+    out.append(f'<circle id="acidrain_node_{FOAM + i}" transform="matrix(1 0 0 1 640 320)" cx="0" cy="0" r="{fmt(radius)}" fill="#C8C8C8" stroke="#C8C8C8" stroke-width="0.5"/>')
 square = path_d([(-2, -2), (2, -2), (2, 2), (-2, 2)])
 bar = path_d([(-20, -1.5), (0, -1.5), (0, 1.5), (-20, 1.5)])
 dash = path_d([(-4, -1), (4, -1), (4, 1), (-4, 1)])
@@ -278,7 +283,7 @@ const i32 centre_x = {q10(cx)}, centre_y = {q10(cy)};  // the face, Q10 px
 const u32_t_placeholder = 0;
 const i32 segment = {int(SEGMENT)};       // a grid segment's authored length, px
 const unsigned header = {HEADER}, grid = {GRID};
-const unsigned splash = {SPLASH}, lane = {LANE};
+const unsigned splash = {SPLASH}, lane = {LANE}, foam = {FOAM};
 const unsigned crown = {CROWN}, droplets = {DROPLETS};  // pixels per splash
 const unsigned joint_count = {len(J)}, segment_count = {len(segments)};
 

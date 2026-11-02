@@ -16,17 +16,18 @@ using namespace opxy::draw;
 namespace s = screen;
 
 const i32 second = 1024;                 // Q10 seconds
-const u32 drop_count = 8, splash_count = 2;
+const u32 drop_count = 12, splash_count = 2, foam_count = 24;
 const i32 lane_left = 60 * unit, lane_step = 24 * unit, lane_y = 205 * unit;
 const i32 hold = 461;                    // the eyes hold as bolts for 0.15 s + 0.3 s
 const u32 ripple_turn = 154;
 const i32 reach = 63 * unit;              // a path's points stay within 64 px of its node (x 2 on screen)
-// The water moves a face point at most 4 px and a grid joint 8 px, however
-// many drops overlap: the face's lines, 12 px apart or more (9 under a bolt),
-// never meet, and neighbouring joints never fold over.
-const i32 face_reach_u = 26, face_reach_v = 61;    // 4 px, floor Q10 units
-const i32 grid_reach = 8 * unit;                    // Q10 px
-const u32 frame_budget = 12;             // grid segments and splash pixels redrawn a frame, about
+// One refraction field moves the floor and everything painted on it alike,
+// at most 5 px however many drops overlap: the face's lines, 12 px apart or
+// more (9 under a bolt), never meet, and neighbouring joints never fold over.
+const i32 reach_u = 32, reach_v = 76;    // 5 px across and down, floor Q10 units
+const i32 grid_reach = 5 * unit;         // Q10 px
+const u32 foam_moves = 6;                // froth flecks moved a frame, at most
+const u32 frame_budget = 14;             // grid segments, splash and froth redrawn a frame, about
 const u8 lane_used = 1, lane_accented = 2, lane_slid = 4, lane_auto = 8;
 
 enum Shade : u32 { black = 0, grey = 1, line = 2, smile_line = 3, bright = 4, mid = 5, dim = 6, face = 7 };
@@ -161,7 +162,7 @@ static inline void shift(const DisplayState& state, const Water& w, const i32 (&
         if (behind < 0 || behind >= train[d] || r < 16) continue;
         const i32 envelope = decay((drop.age * w.fade >> 10) + (r * 307 >> 10));  // e^-(fade t) e^-(0.3 r), Q15
         const i32 window = s::wave[(behind * inverse[d]) >> 16 & 255];                 // a half-sine over the train
-        const i32 phase = s::wave[(((turns[d] * -behind) >> 10) + 64) & 255];          // cos k (r - front)
+        const i32 phase = s::wave[(((turns[d] * -behind) >> 10) + 64 + drop.phase) & 255];  // cos (k (r - front) + its phase)
         const i32 m = ((((peak[d] * envelope) >> 15) * window >> 10) * phase) >> 10;   // Q10 units
         const i32 inv = s::reciprocal[r >> 4 > 255 ? 255 : r >> 4];
         du += (m * ((dx * inv) >> 10)) >> 10;
@@ -169,19 +170,19 @@ static inline void shift(const DisplayState& state, const Water& w, const i32 (&
     }
 }
 
-// The water's shift at a point of the face, held to 5 px.
+// The water's shift at a point of the face, held to 5 px like the grid's.
 static inline void face_shift(const DisplayState& state, const Water& w, const i32 (&peak)[drop_count],
                               const i32 (&train)[drop_count], const i32 (&inverse)[drop_count], const i32 (&turns)[drop_count],
                               i32 u, i32 v, i32& du, i32& dv) {
     shift(state, w, peak, train, inverse, turns, u, v, du, dv);
-    du = clamp(du, -face_reach_u, face_reach_u);
-    dv = clamp(dv, -face_reach_v, face_reach_v);
+    du = clamp(du, -reach_u, reach_u);
+    dv = clamp(dv, -reach_v, reach_v);
 }
 
-// Two passes of a 1-2-1 average over an outline's shifts, so neighbouring
-// points move together. A closed outline wraps; an open one keeps its ends.
+// A 1-2-1 average over an outline's shifts, so neighbouring points move
+// together. A closed outline wraps; an open one keeps its ends.
 static inline void smooth(i32 (*d)[2], u32 count, bool closed) {
-    for (u32 pass = 0; pass < 2; ++pass)
+    for (u32 pass = 0; pass < 1; ++pass)
         for (u32 c = 0; c < 2; ++c) {
             const i32 first = d[0][c];
             i32 previous = closed ? d[count - 1][c] : d[0][c];
@@ -192,6 +193,26 @@ static inline void smooth(i32 (*d)[2], u32 count, bool closed) {
                 previous = here;
             }
         }
+}
+
+// A floor offset's length squared on screen, in quarter pixels.
+static inline i32 span(i32 du, i32 dv) {
+    const i32 x = (du * s::scale) >> 8, y = (((dv * s::scale) >> 8) * s::slant) >> 10;
+    return x * x + y * y;
+}
+// Keeps an outline's neighbouring points at 60% or more of their resting gap:
+// where the water would squeeze two closer, both take their mean shift, which
+// puts them back at their resting gap. (Floor Q10 units.)
+static inline void guard(const i32 (*rest)[2], i32 (*d)[2], u32 count, bool closed) {
+    for (u32 pass = 0; pass < 3; ++pass)  // mending one pair can squeeze the next
+    for (u32 i = 0; i < count; ++i) {
+        const u32 j = i + 1 < count ? i + 1 : 0;
+        if (!j && !closed) break;
+        const i32 ru = rest[j][0] - rest[i][0], rv = rest[j][1] - rest[i][1];
+        const i32 nu = ru + d[j][0] - d[i][0], nv = rv + d[j][1] - d[i][1];
+        if (100 * span(nu, nv) >= 36 * span(ru, rv)) continue;
+        for (u32 c = 0; c < 2; ++c) d[i][c] = d[j][c] = (d[i][c] + d[j][c]) >> 1;
+    }
 }
 
 // Takes an outline's new points (Q10 px) when any moved half a pixel or more;
@@ -224,6 +245,8 @@ static inline Drop& add_drop(DisplayState& state, i32 u, i32 v, i32 strength, i3
     drop.age = 0;
     drop.strength = strength;
     drop.tight = tight;
+    drop.kscale = drop.height = 1024;
+    drop.phase = 0;
     return drop;
 }
 
@@ -296,11 +319,45 @@ inline void display(DisplayState& state, const Input& input, Frame& frame) {
         const i32 angle = static_cast<i32>(h & 255), radius = static_cast<i32>((h >> 8 & 1023) * 440 >> 10);
         const i32 u = (s::wave[(angle + 64) & 255] * radius) >> 10, v = (s::wave[angle] * radius) >> 10;
         if (!still) {
-            Drop& drop = add_drop(state, u, v, 1024, 0);  // every note alike: accents show in the eyes and splash
+            // Every note alike (accents show in the eyes and splash), but each drop
+            // a little different: its rings' tightness, height and phase.
+            Drop& drop = add_drop(state, u, v, 1024, 0);
+            const u32 j = mix(serial * 0x2545f491u + 3);
+            drop.kscale = 819 + static_cast<i32>((j & 1023) * 410 >> 10);        // x0.8 .. 1.2
+            drop.height = 717 + static_cast<i32>((j >> 10 & 1023) * 461 >> 10);  // x0.7 .. 1.15
+            drop.phase = static_cast<i32>(j >> 20 & 255);
             if (sl == 1 && n + state.head) {  // a slide drags the drop from the last one
                 drop.from_u = state.last_u;
                 drop.from_v = state.last_v;
                 drop.glide = 154;
+            }
+        }
+        if (!still) {
+            // Two satellite drops land just after, close by, with tighter rings.
+            for (u32 k = 0; k < 2; ++k) {
+                const u32 h2 = mix(serial * 31u + k * 7919u + 11);
+                const i32 a2 = static_cast<i32>(h2 & 255), r2 = 51 + static_cast<i32>((h2 >> 8 & 1023) * 72 >> 10);
+                Drop& satellite = add_drop(state, u + ((s::wave[(a2 + 64) & 255] * r2) >> 10), v + ((s::wave[a2] * r2) >> 10), 256, 0);
+                satellite.kscale = 1638;                                            // x1.6
+                satellite.age = -(51 + static_cast<i32>((h2 >> 18 & 1023) * 72 >> 10));  // 0.05 .. 0.12 s late
+                satellite.phase = static_cast<i32>(h2 >> 24);
+            }
+            // Froth: six flecks ride out behind the ring front, two bubbles stay by the drop.
+            for (u32 k = 0; k < 8; ++k) {
+                const u32 h3 = mix(serial * 0x9e3779b1u + k * 131u + 5);
+                Foam& f = state.foam[state.next_foam++ % foam_count];
+                const i32 angle = static_cast<i32>((k * 256 / 6 + (h3 & 31)) & 255);
+                const i32 c = s::wave[(angle + 64) & 255], sn = s::wave[angle];
+                const bool bubble = k >= 6;
+                const i32 start = bubble ? 20 + static_cast<i32>(h3 >> 5 & 63) : 31;
+                const i32 speed = bubble ? 0 : (614 * (819 + static_cast<i32>((h3 >> 11 & 1023) * 410 >> 10))) >> 10;  // 0.6 x the front, x0.8 .. 1.2
+                const i32 drift = static_cast<i32>(h3 >> 21 & 63) - 32;  // sideways, Q10 units a second
+                f.u = u + ((c * start) >> 10);
+                f.v = v + ((sn * start) >> 10);
+                f.du = ((c * speed) >> 10) - ((sn * drift) >> 10);
+                f.dv = ((sn * speed) >> 10) + ((c * drift) >> 10);
+                f.age = 0;
+                f.life = (bubble ? 410 : 614) + static_cast<i32>((h3 >> 27) * (bubble ? 26 : 20));  // 0.4 .. 1.2 s
             }
         }
         state.last_u = u;
@@ -356,7 +413,7 @@ inline void display(DisplayState& state, const Input& input, Frame& frame) {
         if (!drop.strength) continue;
         drop.age += dt;
         // Gone under 8%, or once its last ring has passed the centre grid.
-        const i32 tight = drop.tight ? drop.tight : w.tight;
+        const i32 tight = ((drop.tight ? drop.tight : w.tight) * drop.kscale) >> 10;
         const i32 last = (drop.age * w.front_speed >> 10) - 6434 * w.rings / (tight * 1024);
         if (still || (drop.age * w.fade >> 10) > 2560 || last > 1700) drop.strength = 0;
         if (drop.glide > 0) drop.glide = drop.glide > dt ? drop.glide - dt : 0;
@@ -366,11 +423,13 @@ inline void display(DisplayState& state, const Input& input, Frame& frame) {
         Drop& drop = state.drops[d];
         peak[d] = 0;
         if (!drop.strength) continue;
-        const i32 tight = drop.tight ? drop.tight : w.tight;
-        // Ring height: refraction x amplitude x tightness, capped at 12 px; then env mod.
+        i32 tight = ((drop.tight ? drop.tight : w.tight) * drop.kscale) >> 10;
+        if (tight < 1) tight = 1;
+        // Ring height: refraction x amplitude x tightness, capped at 12 px; then
+        // env mod and the drop's own height.
         i32 p = (4 * tight * drop.strength) >> 10;
         if (p > 77) p = 77;
-        peak[d] = (p * w.height) >> 10;
+        peak[d] = (((p * w.height) >> 10) * drop.height) >> 10;
         train[d] = 6434 * w.rings / (tight * 1024);  // the rings' wavelength 2 pi / k, times their count
         if (train[d] < 64) train[d] = 64;
         inverse[d] = (128 << 16) / train[d];
@@ -393,27 +452,25 @@ inline void display(DisplayState& state, const Input& input, Frame& frame) {
     i32 du, dv;
     const i32 px = snap(s::centre_x), py = snap(s::centre_y);
 
-    // The border: refracted, and pitted where the water moves it as the pH
-    // falls (up to 3 px). At rest it is smooth. It moves only across its line
-    // (radially), never along it, and its shift is smoothed over neighbouring
-    // points, so tight rings can't bunch the points up.
-    i32 points[64][2], shifts[64][2];
+    // The border: refracted like the floor under it, and pitted where the water
+    // moves it as the pH falls (up to 3 px). At rest it is smooth. Its shift is
+    // smoothed once over neighbours and guarded so its points never bunch.
+    i32 points[64][2], shifts[64][2], rest[64][2];
     for (u32 i = 0; i < 64; ++i) {
-        face_shift(state, w, peak, train, inverse, turns, s::border_u[i], s::border_v[i], du, dv);
-        const i32 across = ((du * s::border_u[i] + dv * s::border_v[i]) * 1708) >> 20;  // along the radius, / 0.6 units
-        shifts[i][0] = (across * s::border_u[i] * 1708) >> 20;
-        shifts[i][1] = (across * s::border_v[i] * 1708) >> 20;
+        rest[i][0] = s::border_u[i];
+        rest[i][1] = s::border_v[i];
+        face_shift(state, w, peak, train, inverse, turns, rest[i][0], rest[i][1], shifts[i][0], shifts[i][1]);
     }
     smooth(shifts, 64, true);
     for (u32 i = 0; i < 64; ++i) {
-        du = shifts[i][0];
-        dv = shifts[i][1];
-        const i32 moving = clamp(magnitude(du) + magnitude(dv), 0, 32) * 32;  // Q10: 1 once it moves about 4 px
+        const i32 moving = clamp(magnitude(shifts[i][0]) + magnitude(shifts[i][1]), 0, 32) * 32;  // Q10: 1 once it moves about 4 px
         const i32 pit = (((s::pits[i] * acid) >> 10) * moving) >> 10;  // Q10, -1..1
-        const i32 u = s::border_u[i] + du + ((s::border_u[i] * pit) >> 10) * 3 / 99;
-        const i32 v = s::border_v[i] + dv + ((s::border_v[i] * pit) >> 10) * 3 / 99;
-        screen_point(u, v, 0, 0, points[i][0], points[i][1]);
+        shifts[i][0] += ((s::border_u[i] * pit) >> 10) * 3 / 99;
+        shifts[i][1] += ((s::border_v[i] * pit) >> 10) * 3 / 99;
     }
+    guard(rest, shifts, 64, true);
+    for (u32 i = 0; i < 64; ++i)
+        screen_point(rest[i][0], rest[i][1], shifts[i][0], shifts[i][1], points[i][0], points[i][1]);
     if (commit(state.border, points, 64, fresh)) {
         state.keys[0] = state.keys[0] % 0xfffffff0u + 1;
         frame.paths[0].key = state.keys[0];
@@ -423,9 +480,13 @@ inline void display(DisplayState& state, const Input& input, Frame& frame) {
         }
     }
     // The smile: a thin ribbon around its refracted, smoothed centre line.
-    for (u32 i = 0; i < 32; ++i)
-        face_shift(state, w, peak, train, inverse, turns, s::smile_u[i], s::smile_v[i], shifts[i][0], shifts[i][1]);
+    for (u32 i = 0; i < 32; ++i) {
+        rest[i][0] = s::smile_u[i];
+        rest[i][1] = s::smile_v[i];
+        face_shift(state, w, peak, train, inverse, turns, rest[i][0], rest[i][1], shifts[i][0], shifts[i][1]);
+    }
     smooth(shifts, 32, false);
+    guard(rest, shifts, 32, false);
     for (u32 i = 0; i < 32; ++i)
         screen_point(s::smile_u[i], s::smile_v[i], shifts[i][0], shifts[i][1], points[i][0], points[i][1]);
     if (commit(state.smile, points, 32, fresh)) {
@@ -448,7 +509,6 @@ inline void display(DisplayState& state, const Input& input, Frame& frame) {
     else state.bolt += ((target - state.bolt) * (dt > 154 ? 1024 : dt * 1024 / 51 > 1024 ? 1024 : dt * 1024 / 51)) >> 10;
     if (magnitude(target - state.bolt) < 16) state.bolt = target;
     for (u32 e = 0; e < 2; ++e) {
-        i32 rest[64][2];
         for (u32 i = 0; i < 64; ++i) {
             const u32 k = e * 64 + i;
             rest[i][0] = s::eye_u[e] + s::oval_u[k] + (((s::bolt_u[k] - s::oval_u[k]) * state.bolt) >> 10);
@@ -456,6 +516,7 @@ inline void display(DisplayState& state, const Input& input, Frame& frame) {
             face_shift(state, w, peak, train, inverse, turns, rest[i][0], rest[i][1], shifts[i][0], shifts[i][1]);
         }
         smooth(shifts, 64, true);
+        guard(rest, shifts, 64, true);
         for (u32 i = 0; i < 64; ++i)
             screen_point(rest[i][0], rest[i][1], shifts[i][0], shifts[i][1], points[i][0], points[i][1]);
         if (commit(state.eyes[e], points, 64, fresh)) {
@@ -588,6 +649,44 @@ inline void display(DisplayState& state, const Input& input, Frame& frame) {
             splash.age = -1;
             for (u32 i = 0; i < s::crown + s::droplets; ++i) hide(frame, first + i);
         }
+    }
+
+    // Froth: flecks drift out behind the rings and slow down, shrinking and
+    // fading before they pop; bubbles sit by the drop and pop. They float on
+    // the surface, so the water doesn't refract them. Half the flecks move each
+    // frame, at most `foam_moves`.
+    state.foam_turn ^= 1;
+    u32 moved = 0;
+    for (u32 i = 0; i < foam_count; ++i) {
+        Foam& f = state.foam[i];
+        const u32 node = s::foam + i;
+        if (fresh || still) {
+            f.life = 0;
+            hide(frame, node);
+            continue;
+        }
+        if (!f.life) continue;
+        f.age += dt;
+        f.u += (f.du * dt) >> 10;
+        f.v += (f.dv * dt) >> 10;
+        const i32 drag = 1024 - (dt * 3 >> 1);  // velocity falls by 1.5 a second
+        f.du = (f.du * drag) >> 10;
+        f.dv = (f.dv * drag) >> 10;
+        if (f.age >= f.life) {
+            f.life = 0;
+            hide(frame, node);
+            ++state.splash_cost;
+            continue;
+        }
+        if ((i & 1) != state.foam_turn && f.age > dt) continue;  // its turn is next frame
+        if (moved >= foam_moves) continue;
+        const i32 left = ((f.life - f.age) << 10) / f.life;  // Q10 of its life to go
+        const u32 shade = left > 512 ? bright : left > 256 ? mid : dim;
+        i32 x, y;
+        screen_point(f.u, f.v, 0, 0, x, y);
+        place(frame, node, snap(x), snap(y), 614 + (410 * left >> 10), shade, fill_and_stroke);
+        ++moved;
+        ++state.splash_cost;
     }
 
     // The lane: a fixed ring of sixteen cells, written in turn, with a cursor

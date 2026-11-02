@@ -13,7 +13,7 @@ const i32 slant = 430;           // and down, Q10 of that
 const i32 centre_x = 245760, centre_y = 118784;  // the face, Q10 px
 const i32 segment = 32;       // a grid segment's authored length, px
 const unsigned header = 4, grid = 12;
-const unsigned splash = 112, lane = 144;
+const unsigned splash = 112, lane = 144, foam = 193;
 const unsigned crown = 10, droplets = 6;  // pixels per splash
 const unsigned joint_count = 61, segment_count = 100;
 

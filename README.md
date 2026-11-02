@@ -3,8 +3,9 @@
 A TB-303 voice for the OP-XY, an [Open-XY](https://github.com/etcetc000/open-xy)
 machine (ID `acidrain`). The sound is Robin Schmidt's
 [Open303](https://github.com/RobinSchmidt/Open303) in fixed point. The screen is
-a bold round smiley painted on the floor under water: every note drops into the
-water and its rings bend the floor and the face a few pixels. At rest the face
+a round smiley painted on the floor under water: every note drops into the
+water, its uneven rings refract the floor and the face a few pixels, and froth
+drifts out on the surface and pops. At rest the face
 and the grid are still and straight.
 
 A few big controls change the whole line, as Sting does: the engine can't write
