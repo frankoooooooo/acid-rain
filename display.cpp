@@ -19,6 +19,8 @@ const u32 drop_count = 8, splash_count = 2;
 const i32 lane_left = 60 * unit, lane_step = 24 * unit, lane_y = 205 * unit;
 const i32 hold = 461;                    // the eyes hold as bolts for 0.15 s + 0.3 s
 const u32 ripple_turn = 154;
+const i32 reach = 63 * unit;              // a path's points stay within 64 px of its node (x 2 on screen)
+const i32 face_gain = 3;                 // the face's line bends three times as far as the grid may
 const u32 frame_budget = 12;             // grid segments and splash pixels redrawn a frame, about
 const u8 lane_used = 1, lane_accented = 2, lane_slid = 4, lane_auto = 8;
 
@@ -130,11 +132,10 @@ static inline Water water(const Input& input) {
     const i32 reso = input.slots[1] < 0 ? 0 : input.slots[1] >> 21;    // Q10
     w.rings = 1024 + 7 * reso;                                          // 1 to 8 wavelengths
     const i32 env = input.slots[2] < 0 ? 0 : input.slots[2] >> 21;
-    w.height = 205 + (env * 819 >> 10);                                 // 0.2 .. 1.0 of the tallest ring, Q10
+    w.height = 154 + (env * 870 >> 10);                                 // 0.15 .. 1.0 of the tallest ring, Q10
     const i32 knob = input.slots[3] < 0 ? 0 : input.slots[3] >> 15;
     const i32 tau = (205 * power(static_cast<i32>((static_cast<u32>(knob) * 3402u) >> 10))) >> 14;  // 0.2 .. 2.0 s, Q10
-    // 0.9 at the default 0.4 s, as sqrt(0.4 / tau): 1.27 at 0.2 s, 0.4 at 2.0 s.
-    w.fade = static_cast<i32>(922 * root(static_cast<u32>((410 << 10) / (tau < 205 ? 205 : tau))) >> 5);
+    w.fade = 369 * 1024 / (tau < 205 ? 205 : tau);  // 0.36 / tau: 0.9 at the default 0.4 s, 1.8 at 0.2 s, 0.18 at 2.0 s
     return w;
 }
 
@@ -361,6 +362,8 @@ inline void display(DisplayState& state, const Input& input, Frame& frame) {
     i32 points[64][2];
     for (u32 i = 0; i < 64; ++i) {
         shift(state, w, peak, train, inverse, turns, s::border_u[i], s::border_v[i], du, dv);
+        du *= face_gain;
+        dv *= face_gain;
         const i32 pit = (s::pits[i] * acid) >> 10;  // Q10, -1..1
         const i32 u = s::border_u[i] + du + ((s::border_u[i] * pit) >> 10) * 3 / 99;
         const i32 v = s::border_v[i] + dv + ((s::border_v[i] * pit) >> 10) * 3 / 99;
@@ -376,14 +379,16 @@ inline void display(DisplayState& state, const Input& input, Frame& frame) {
         for (u32 i = 0; i < 64; ++i) {
             state.border[i][0] = snap(points[i][0]);
             state.border[i][1] = snap(points[i][1]);
-            frame.paths[0].points[i].x = (state.border[i][0] - px) >> 1;
-            frame.paths[0].points[i].y = (state.border[i][1] - py) >> 1;
+            frame.paths[0].points[i].x = clamp((state.border[i][0] - px) >> 1, -reach, reach);
+            frame.paths[0].points[i].y = clamp((state.border[i][1] - py) >> 1, -reach, reach);
         }
     }
     // The smile: a thin ribbon around its refracted centre line.
     bool smile_moved = fresh || pivot_moved;
     for (u32 i = 0; i < 32; ++i) {
         shift(state, w, peak, train, inverse, turns, s::smile_u[i], s::smile_v[i], du, dv);
+        du *= face_gain;
+        dv *= face_gain;
         i32 x, y;
         screen_point(s::smile_u[i], s::smile_v[i], du, dv, x, y);
         points[i][0] = x;
@@ -396,7 +401,7 @@ inline void display(DisplayState& state, const Input& input, Frame& frame) {
         for (u32 i = 0; i < 32; ++i) {
             state.smile[i][0] = snap(points[i][0]);
             state.smile[i][1] = snap(points[i][1]);
-            const i32 x = (state.smile[i][0] - px) >> 1, y = (state.smile[i][1] - py) >> 1;
+            const i32 x = clamp((state.smile[i][0] - px) >> 1, -reach, reach), y = clamp((state.smile[i][1] - py) >> 1, -reach, reach);
             frame.paths[1].points[i].x = x + s::smile_dx[i];
             frame.paths[1].points[i].y = y + s::smile_dy[i];
             frame.paths[1].points[63 - i].x = x - s::smile_dx[i];
@@ -584,7 +589,7 @@ inline void display(DisplayState& state, const Input& input, Frame& frame) {
             const i32 by = s::bead_y[i] + (((y - s::bead_y[i]) >> 10) * (f * f >> 10));
             place(frame, node, snap(bx), snap(by), unit, bright, fill_and_stroke);
         } else if (fresh || beads != state.beads || (state.fall < 0 && state.fallen)) {
-            if (i < beads) place(frame, node, s::bead_x[i], s::bead_y[i], unit, mid, fill_and_stroke);
+            if (i < beads) place(frame, node, s::bead_x[i], s::bead_y[i], unit, bright, fill_and_stroke);
             else hide(frame, node);
         }
     }

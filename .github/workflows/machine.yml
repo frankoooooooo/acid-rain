@@ -6,8 +6,8 @@ on:
 permissions:
   contents: read
 env:
-  # Development follows staging; pin a compatible SDK commit for a release.
-  OPEN_XY_REF: staging
+  # Pinned to the SDK staging commit this machine was tested against.
+  OPEN_XY_REF: 16de93ab640539115c282a0592ca0de498948225
 jobs:
   machine:
     runs-on: ubuntu-latest
