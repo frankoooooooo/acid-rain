@@ -5,7 +5,8 @@
 // bend the floor's grid and the face drawn on it. Cutoff sets the rings'
 // spacing, reso how many each drop carries, env mod their height and decay how
 // long they last. Accent turns the eyes to bolts, a slide drags the drop, pH
-// corrodes the face's line and dew gathers as beads until it rains. The lane
+// corrodes the face's line as the water moves it, and dew sets how often it
+// rains: a splash, and the eyes turn to bolts on the accents it brings. The lane
 // along the bottom keeps the last sixteen notes.
 namespace acidrain {
 using opxy::i32;
@@ -203,7 +204,6 @@ static inline void restart(DisplayState& state, const Input& input) {
     state.started = 1;
     state.track = input.track;
     state.serial = input.note_on_serial;
-    state.fall = -1;
     state.since_accent = 10 * second;
     state.since_turn = 10 * second;
     for (u32 i = 0; i < splash_count; ++i) state.splashes[i].age = -1;
@@ -276,12 +276,6 @@ inline void display(DisplayState& state, const Input& input, Frame& frame) {
                 splash.seed = mix(serial);
                 splash.landed = 0;
             }
-            if (rained) {
-                state.fall = still ? -1 : 0;
-                state.fall_u = u;
-                state.fall_v = v;
-                state.fallen = state.beads;
-            }
         }
         // The lane: accents are exact; auto slides depend on pitch, so they show as auto.
         u8 cell = lane_used;
@@ -351,20 +345,22 @@ inline void display(DisplayState& state, const Input& input, Frame& frame) {
         }
     }
 
-    // The face's outlines, its ticks share their pivot: the face's centre,
+    // The face's two outlines share their pivot: the face's centre,
     // which stays put while the water moves their points.
     i32 du, dv;
     const i32 px = snap(s::centre_x), py = snap(s::centre_y);
     const bool pivot_moved = fresh;
 
-    // The border: refracted, and pitted as the pH falls (up to 3 px).
+    // The border: refracted, and pitted where the water moves it as the pH
+    // falls (up to 3 px). At rest it is smooth.
     bool border_moved = fresh || pivot_moved;
     i32 points[64][2];
     for (u32 i = 0; i < 64; ++i) {
         shift(state, w, peak, train, inverse, turns, s::border_u[i], s::border_v[i], du, dv);
         du *= face_gain;
         dv *= face_gain;
-        const i32 pit = (s::pits[i] * acid) >> 10;  // Q10, -1..1
+        const i32 moving = clamp(magnitude(du) + magnitude(dv), 0, 32) * 32;  // Q10: 1 once it moves 5 px
+        const i32 pit = (((s::pits[i] * acid) >> 10) * moving) >> 10;  // Q10, -1..1
         const i32 u = s::border_u[i] + du + ((s::border_u[i] * pit) >> 10) * 3 / 99;
         const i32 v = s::border_v[i] + dv + ((s::border_v[i] * pit) >> 10) * 3 / 99;
         i32 x, y;
@@ -411,8 +407,6 @@ inline void display(DisplayState& state, const Input& input, Frame& frame) {
     if (pivot_moved) {
         place(frame, 0, px, py, 2 * unit, line, stroke);
         place(frame, 1, px, py, 2 * unit, smile_line, stroke);
-        place(frame, s::ticks, px, py, 2 * unit, smile_line, stroke);
-        place(frame, s::ticks + 1, px, py, 2 * unit, smile_line, stroke);
     }
 
     // The eyes: ovals that ease into bolts on an accent, hold, then ease back.
@@ -554,47 +548,6 @@ inline void display(DisplayState& state, const Input& input, Frame& frame) {
             for (u32 i = 0; i < s::crown + s::droplets; ++i) hide(frame, first + i);
         }
     }
-
-    // Dew: up to 16 beads around the face, the humidity against the dew
-    // threshold. When it rains they fall into the splash.
-    u32 beads = 0;
-    const i32 dew = input.slots[7] < 0 ? 0 : input.slots[7] >> 16;
-    if (dew) {
-        Rain now = state.rain;
-        now.pending = 0;
-        const u32 blocks = static_cast<u32>(state.since_note) * 689u >> 10;
-        for (u32 b = 0; b < 13; ++b)
-            if ((blocks > 8191 ? 8191 : blocks) >> b & 1) {
-                now.fast = opxy::q31::multiply(now.fast, rain_tables::fast_evaporation[b]);
-                now.slow = opxy::q31::multiply(now.slow, rain_tables::slow_evaporation[b]);
-            }
-        const i32 index = dew >> 10, fraction = (dew & 1023) << 21;
-        const i32* const t = rain_tables::threshold;
-        const i32 threshold = index >= 32 ? t[32] : t[index] + opxy::q31::multiply(t[index + 1] - t[index], fraction);
-        const i32 wet = now.fast + now.slow;
-        beads = static_cast<u32>(clamp(((wet >> 8) * 16) / ((threshold >> 8) + 1), 0, 16));
-    }
-    if (state.fall >= 0) {
-        state.fall += dt;
-        if (state.fall > 154) state.fall = -1;  // 0.15 s
-    }
-    for (u32 i = 0; i < 16; ++i) {
-        const u32 node = s::beads + i;
-        if (state.fall >= 0 && i < state.fallen) {
-            // Falling into the splash, easing in.
-            i32 x, y;
-            screen_point(state.fall_u, state.fall_v, 0, 0, x, y);
-            const i32 f = state.fall * 20 / 3;  // Q10 of the fall
-            const i32 bx = s::bead_x[i] + (((x - s::bead_x[i]) >> 10) * (f * f >> 10));
-            const i32 by = s::bead_y[i] + (((y - s::bead_y[i]) >> 10) * (f * f >> 10));
-            place(frame, node, snap(bx), snap(by), unit, bright, fill_and_stroke);
-        } else if (fresh || beads != state.beads || (state.fall < 0 && state.fallen)) {
-            if (i < beads) place(frame, node, s::bead_x[i], s::bead_y[i], unit, bright, fill_and_stroke);
-            else hide(frame, node);
-        }
-    }
-    if (state.fall < 0) state.fallen = 0;
-    state.beads = beads;
 
     // The lane: a fixed ring of sixteen cells, written in turn, with a cursor
     // under the newest. Only the written cell and the cursor change.

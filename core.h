@@ -33,6 +33,8 @@ struct Shared {
     opxy::i32 envelope;        // and its filter envelope, which a slide carries on
     opxy::u32 clock;           // blocks rendered by the newest note
     opxy::u32 ticker;          // the owner advancing the clock: the newest note
+    opxy::u32 previous;        // the note before it
+    opxy::u32 cut;             // a note a slide has replaced: it closes, as on a monophonic 303
     opxy::u32 note_clock;      // the clock at the last note start
     opxy::i32 build;           // accent build-up over consecutive accents (Open303's accent RC), Q31
     Rain rain;                 // humidity, which decides the rain accents

@@ -4,7 +4,7 @@
 
 namespace acidrain {
 // Matches resources.display in definition.json: paths, points, nodes, texts, palette.
-using Frame = opxy::draw::Frame<2, 64, 213, 16, 8>;
+using Frame = opxy::draw::Frame<2, 64, 195, 16, 8>;
 
 // A drop on the water: its centre (floor Q10 units), where a slide drags it
 // from, its age (Q10 s), strength (Q10) and ring tightness (0: the cutoff's).
@@ -22,9 +22,6 @@ struct DisplayState {
     opxy::i32 since_accent;    // Q10 s since the eyes turned to bolts
     opxy::i32 bolt;            // how far the eyes have turned, Q10
     opxy::i32 since_turn;      // Q10 s since the last preview ripple
-    opxy::i32 fall;            // Q10 s into the beads' fall into a splash, negative when none
-    opxy::i32 fall_u, fall_v;  // where they fall
-    opxy::u32 beads, fallen;   // beads shown, and how many are falling
     opxy::i32 last_u, last_v;  // the newest note's drop
     opxy::i32 knobs[4];        // the sound controls last frame
     Rain rain;

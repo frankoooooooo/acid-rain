@@ -70,8 +70,9 @@ inline i32 saw(u32 phase, u32 increment, u32 width, u32 reciprocal) {
 
 // A slide carries on from the previous note: its pitch glides here and its
 // filter envelope keeps decaying, without a retrigger.
-inline void slide(Voice& voice, u32 increment) {
+inline void slide(Voice& voice, Shared& shared, u32 increment) {
     if (!voice.origin) return;  // nothing played before: nothing to slide from
+    shared.cut = shared.previous;  // the glide carries the line alone
     voice.offset = static_cast<i32>(voice.origin - increment);
     voice.envelope = voice.origin_envelope;
 }
@@ -86,6 +87,8 @@ inline void start(Voice& voice, Shared& shared, u32 owner) {
     voice = Voice();
     voice.phase = phase;  // a free-running phase, like the 303's oscillator
     voice.envelope = voice.amp = voice.gate = full;
+    if (shared.ticker != owner) shared.previous = shared.ticker;
+    if (shared.cut == owner) shared.cut = 0;  // a new note on a voice a slide closed
     shared.ticker = owner;  // the newest note keeps time and carries the line
 }
 inline void destroy(Voice&, Shared& shared, u32 owner) {
@@ -123,7 +126,7 @@ inline void begin(Voice& voice, Shared& shared, opxy::Parameters parameters, u32
     }
     voice.lane = lane;
     const u32 octave = lane & lane_octave ? 1 : 0;
-    if (lane & lane_slide) slide(voice, increment << octave);
+    if (lane & lane_slide) slide(voice, shared, increment << octave);
     if (lane & lane_accent) accent(shared);
 }
 
@@ -139,7 +142,7 @@ inline void relatch(Voice& voice, Shared& shared, opxy::Parameters parameters, u
     }
     if (s == on && !(voice.lane & lane_slide)) {
         voice.lane |= lane_slide | lane_slide_locked;
-        slide(voice, increment << octave);
+        slide(voice, shared, increment << octave);
     } else if (s == off && (voice.lane & lane_slide) && !(voice.lane & lane_slide_locked)) {
         voice.lane &= ~lane_slide;
         voice.offset = 0;
@@ -169,7 +172,7 @@ inline void render(Voice& voice, Shared& shared, u32 owner, opxy::Output output,
     voice.envelope = multiply(voice.envelope, accented ? t::accent_decay : knob(t::decay_coefficient, parameters[3]));
     voice.sweep += multiply((accented ? voice.envelope : 0) - voice.sweep, t::accent_smoothing);
     voice.amp = multiply(voice.amp, t::amp_decay);
-    if ((lane & lane_short) && voice.age > short_blocks) voice.gate = multiply(voice.gate, t::gate_close);
+    if (((lane & lane_short) && voice.age > short_blocks) || owner == shared.cut) voice.gate = multiply(voice.gate, t::gate_close);
 
     // Slide: the glide's distance to the played pitch shrinks over 60 ms,
     // ramped across the block (MNMD's Glide).
@@ -269,11 +272,10 @@ inline void render(Voice& voice, Shared& shared, u32 owner, opxy::Output output,
     voice.feedback = feedback;
 
     // Output highpass (Open303's highpass2 and notch, merged), the VCA ramp,
-    // corrosion, and the half-scale ceiling.
+    // corrosion, and a cubic soft clip that reaches half scale.
     i32 hx1 = voice.hx1, hx2 = voice.hx2, hy1 = voice.hy1, hy2 = voice.hy2;
     i32 gain_now = voice.level;
     const i32 dgain = (level - gain_now) >> 6;
-    const i32 ceiling = 1 << 18;  // 2 g vca y / 256 at this, << 12, is half scale
     for (unsigned i = 0; i < opxy::block_frames; ++i) {
         const i32 x = output[i];
         const i32 y = (multiply(t::hp_b0, x - 2 * hx1 + hx2) - multiply(t::hp_a1, hy1) - multiply(t::hp_a2, hy2)) * 2;
@@ -284,8 +286,12 @@ inline void render(Voice& voice, Shared& shared, u32 owner, opxy::Output output,
             const i32 folded = shape(t::fold, m + multiply(m, acid << 16), 10) >> 8;
             m += multiply(folded - m, corrosion);
         }
-        m = m > ceiling ? ceiling : m < -ceiling ? -ceiling : m;
-        output[i] = m * 4096;  // 6 dB under Open303 at -12 dB, so its accents fit under half scale
+        // Open303's level (-12 dB) through u - u^3 / 3, u = m / (1.5 2^17), Q15:
+        // flat to the ear at normal levels, warm under accent, never past half scale.
+        i32 u = multiply(m, 357913941);
+        u = u > 32767 ? 32767 : u < -32767 ? -32767 : u;
+        const i32 cube = ((u * u >> 15) * u) >> 15;
+        output[i] = (u - (cube * 10923 >> 15)) * 49150;  // at most 21846 x 49150 < 2^30
     }
     voice.hx1 = hx1; voice.hx2 = hx2; voice.hy1 = hy1; voice.hy2 = hy2;
     voice.level = level;

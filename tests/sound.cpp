@@ -150,6 +150,23 @@ int main() {
         check("slide arrives", g.offset > -static_cast<i32>(a2 / 50) && g.offset <= 0);
     }
 
+    // A slide closes the note it replaces, as on a monophonic 303.
+    {
+        Line line;
+        const i32 plain[8] = {init[0], init[1], init[2], init[3], off, off, full, 0};
+        const i32 sliding[8] = {init[0], init[1], init[2], init[3], off, on, full, 0};
+        line.play(plain, a2, 40);
+        line.play(sliding, a2 * 2, 1);
+        Voice& old = line.voices[line.owner % 2];
+        u32 pitch[opxy::block_frames];
+        i32 output[opxy::block_frames];
+        for (u32 i = 0; i < opxy::block_frames; ++i) pitch[i] = a2;
+        for (u32 b = 0; b < 40; ++b) acidrain::render(old, line.shared, line.owner % 2 + 1, output, plain, pitch);
+        check("a slide closes the old note", (old.lane & acidrain::lane_quiet) != 0);
+        line.play(plain, a2, 4);  // that voice plays again: it isn't closed
+        check("a reused voice sounds", (line.note().lane & acidrain::lane_quiet) == 0 && line.peak > 0);
+    }
+
     // A lock a block late still counts; a late "off" overrides a rain accent.
     {
         Line line;

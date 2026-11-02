@@ -3,8 +3,8 @@
 A TB-303 voice for the OP-XY, an [Open-XY](https://github.com/etcetc000/open-xy)
 machine (ID `acidrain`). The sound is Robin Schmidt's
 [Open303](https://github.com/RobinSchmidt/Open303) in fixed point. The screen is
-a smiley drawn on the floor under water: every note drops into the water and its
-rings bend the floor and the face.
+a smiley painted on the floor under water: every note drops into the water and
+its rings bend the floor and the face. At rest the face and the grid are still and straight.
 
 A few big controls change the whole line, as Sting does: the engine can't write
 notes, so it generates the lanes around them (accent, slide, octave and gate),
@@ -22,8 +22,8 @@ Press any encoder to switch pages.
 | 1 | decay | `0.2s` to `2.0s` | `0.4s` | The filter envelope's decay. On screen: how long ripples last |
 | 2 | accent | `off`, `on`, `auto` | off | `on` accents every note; `auto` accents the notes it rains on. Eyes turn to bolts |
 | 2 | slide | `off`, `on`, `auto` | off | `on` glides into this note; `auto` lets the rain lane decide slides, octave jumps and short gates |
-| 2 | ph | `2.0` to `7.0` | `7.0` | Turn anticlockwise for acid: more auto slides and octave jumps, and corrosion (wavefold and grit) that deepens over consecutive accents. 7.0 is clean |
-| 2 | dew | 0 to 100 | 0 | How often it rains. 0 never rains. On screen: beads of dew gather around the face until it rains |
+| 2 | ph | `2.0` to `7.0` | `7.0` | Turn anticlockwise for acid: more auto slides and octave jumps, and corrosion (wavefold and grit) that deepens over consecutive accents. 7.0 is clean. On screen: the face's line pits where the water moves it |
+| 2 | dew | 0 to 100 | 0 | How often it rains. 0 never rains. On screen: a splash and bolt eyes on each rain accent |
 
 Accent and slide are meant to be **parameter-locked per step**: a lock of `on`
 or `off` always wins, and `auto` hands that step to the rain.
@@ -38,6 +38,8 @@ or `off` always wins, and `auto` hands that step to the rain.
   crosses the dew threshold it rains, accenting the next notes on `auto` (two
   in a row under pH 4.5). The screen runs the same model, so its splashes land
   on the notes you hear accented.
+- **Monophonic slides**: a slide closes the note it replaces within about 5 ms,
+  so the glide carries the line alone even on a polyphonic track.
 - **The rain lane** (slide on `auto`) decides slide, octave jump and short
   gate from the note and the two before it, weighted by pH and dew. The same
   notes give the same decisions at any pattern length; changing a note changes

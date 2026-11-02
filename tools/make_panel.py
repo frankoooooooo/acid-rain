@@ -24,7 +24,8 @@ def screen(u, v):
 
 
 def warp(x, y):
-    """The floor's resting unevenness: a still, gentle wobble in the grid."""
+    """The floor at rest: flat, so the grid's lines are straight until a ripple passes."""
+    return 0.0, 0.0
     return (2.6 * math.sin(0.037 * x + 0.10 * y + 0.7) + 1.4 * math.sin(0.083 * y - 0.029 * x + 2.1),
             2.2 * math.sin(0.046 * x - 0.055 * y + 1.9) + 1.2 * math.sin(0.11 * x + 0.4 + 0.03 * y))
 
@@ -130,10 +131,14 @@ for i in range(64):
     th = 2 * math.pi * i / 64 + 0.05
     r = border_radius(th)
     border.append((r * math.cos(th), 1.25 * r * math.sin(th)))  # taller than round, as drawn
-smile = []
-for i in range(32):
-    th = math.radians(28 + (152 - 28) * i / 31)
-    smile.append((0.5 * math.cos(th), -0.2 + 0.5 * math.sin(th)))
+# The smile's centre line: 30 points of arc with an upturned tick at each
+# corner, all one outline so the corners bend with the water.
+arc = []
+for i in range(30):
+    th = math.radians(28 + (152 - 28) * i / 29)
+    arc.append((0.5 * math.cos(th), -0.2 + 0.5 * math.sin(th)))
+tick = lambda end, sign: (end[0] + sign * 0.03, end[1] - 0.16)  # up and a little outward, floor units
+smile = [tick(arc[0], 1)] + arc + [tick(arc[-1], -1)]
 eyes = [(-0.24, -0.27), (0.24, -0.27)]
 # Pseudo-random pits for the pH corrosion, -1..1: alternating, so the line goes jagged.
 pits = [((-1) ** i) * (0.45 + 0.55 * abs(math.sin(i * 12.9898) * 43758.5453 % 1)) for i in range(64)]
@@ -142,31 +147,17 @@ pits = [((-1) ** i) * (0.45 + 0.55 * abs(math.sin(i * 12.9898) * 43758.5453 % 1)
 half = lambda u, v: (S * u / 2, S * K * v / 2)
 smile_half = [half(u, v) for u, v in smile]
 smile_edges = ribbon(smile_half, 0.3)
-# The ticks: a short dash at each end of the smile, up and outward.
-ticks = []
-for end, sign in ((smile_half[0], 1), (smile_half[-1], -1)):
-    x, y = end
-    ticks.append(ribbon([(x - sign * 2.0, y + 3.0), (x + sign * 3.0, y - 3.5)], 0.3))
-
-# Beads of dew, gathered around the face.
-beads = []
-for i in range(16):
-    th = 2 * math.pi * (i + 0.37 * math.sin(i * 7.1)) / 16
-    r = 0.7 + 0.11 * abs(math.sin(i * 3.7))
-    x, y = screen(r * math.cos(th), r * math.sin(th))
-    beads.append((round(x * 2) / 2, round(y * 2) / 2))
 
 # --- Nodes ---------------------------------------------------------------------
 HEADER = 2
-OVALS, BOLTS, TICKS = 10, 12, 14
-GRID = 16
+OVALS, BOLTS = 10, 12
+GRID = 14
 SPLASH = GRID + len(segments)
 CROWN, DROPLETS = 10, 6       # per splash; 6 droplets, not 11, keep the redraw near 20 nodes
 SPLASH_NODES = 2 * (CROWN + DROPLETS)
 LANE = SPLASH + SPLASH_NODES
 LANE_NODES = 49
-BEADS = LANE + LANE_NODES
-NODES = BEADS + 16
+NODES = LANE + LANE_NODES
 assert NODES <= 224, NODES
 
 SEGMENT = 32.0  # a grid segment's authored length; its node scales it to the joints
@@ -184,6 +175,10 @@ for line in static_lines:
     for start in range(0, len(line) - 1, 30):
         part = line[start:start + 31]
         out.append(f'<path d="{path_d(ribbon(part, 0.3))}" fill="none" stroke="#5A5A5A" stroke-width="0.6"/>')
+seg = path_d([(0, -0.3), (SEGMENT, -0.3), (SEGMENT, 0.3), (0, 0.3)])
+for i, (a, b) in enumerate(segments):
+    out.append(f'<path id="acidrain_node_{GRID + i}" d="{seg}" fill="none" stroke="#5A5A5A" stroke-width="0.6"/>')
+out.append("<!-- The face, painted on the floor over the grid. -->")
 join = ' stroke-linejoin="round"' if WEIGHT >= 5 else ""
 cx, cy = screen(0, 0)
 border_half = [half(u, v) for u, v in border]
@@ -207,11 +202,6 @@ for i, (u, v) in enumerate(eyes):
     x, y = screen(u, v)
     shape = bolt() if i == 0 else [(-px, py) for px, py in bolt()][::-1]
     out.append(f'<path id="acidrain_node_{BOLTS + i}" transform="matrix(1 0 0 1 640 320)" d="{path_d(shape)}" fill="#000000" stroke="#000000" stroke-width="0.5"/>')
-for i in range(2):
-    out.append(f'<path id="acidrain_node_{TICKS + i}" transform="matrix(1 0 0 1 {fmt(cx)} {fmt(cy)})" d="{path_d(ticks[i])}" fill="none" stroke="#B4B4B4" stroke-width="{fmt((WEIGHT - 1) / 2)}"/>')
-seg = path_d([(0, -0.3), (SEGMENT, -0.3), (SEGMENT, 0.3), (0, 0.3)])
-for i, (a, b) in enumerate(segments):
-    out.append(f'<path id="acidrain_node_{GRID + i}" d="{seg}" fill="none" stroke="#5A5A5A" stroke-width="0.6"/>')
 square = path_d([(-2, -2), (2, -2), (2, 2), (-2, 2)])
 bar = path_d([(-20, -1.5), (0, -1.5), (0, 1.5), (-20, 1.5)])
 dash = path_d([(-4, -1), (4, -1), (4, 1), (-4, 1)])
@@ -224,8 +214,6 @@ for i in range(16):
 for i in range(16):
     out.append(f'<path id="acidrain_node_{LANE + 32 + i}" transform="matrix(1 0 0 1 640 320)" d="{square}" fill="#4A4A4A" stroke="#4A4A4A" stroke-width="0.5"/>')
 out.append(f'<path id="acidrain_node_{LANE + 48}" transform="matrix(1 0 0 1 640 320)" d="{dash}" fill="#828282" stroke="#828282" stroke-width="0.5"/>')
-for i in range(16):
-    out.append(f'<path id="acidrain_node_{BEADS + i}" transform="matrix(1 0 0 1 640 320)" d="{square}" fill="#C8C8C8" stroke="#C8C8C8" stroke-width="0.5"/>')
 for i, (colour, width) in enumerate(palette):
     out.append(f'<circle id="acidrain_palette_{i}" cx="640" cy="0" r="1" fill="{colour}" stroke="{colour}" stroke-width="{fmt(width)}"/>')
 out.append("</g>")
@@ -262,8 +250,8 @@ const i32 slant = {q10(K)};           // and down, Q10 of that
 const i32 centre_x = {q10(cx)}, centre_y = {q10(cy)};  // the face, Q10 px
 const u32_t_placeholder = 0;
 const i32 segment = {int(SEGMENT)};       // a grid segment's authored length, px
-const unsigned header = {HEADER}, ovals = {OVALS}, bolts = {BOLTS}, ticks = {TICKS}, grid = {GRID};
-const unsigned splash = {SPLASH}, lane = {LANE}, beads = {BEADS};
+const unsigned header = {HEADER}, ovals = {OVALS}, bolts = {BOLTS}, grid = {GRID};
+const unsigned splash = {SPLASH}, lane = {LANE};
 const unsigned crown = {CROWN}, droplets = {DROPLETS};  // pixels per splash
 const unsigned joint_count = {len(J)}, segment_count = {len(segments)};
 
@@ -287,8 +275,6 @@ const unsigned joint_count = {len(J)}, segment_count = {len(segments)};
 {row("smile_dy", "i32", [q10(smile_edges[i][1] - smile_half[i][1]) for i in range(32)])}
 {row("eye_u", "i32", [q10(u) for u, v in eyes])}
 {row("eye_v", "i32", [q10(v) for u, v in eyes])}
-{row("bead_x", "i32", [q10(x) for x, y in beads])}
-{row("bead_y", "i32", [q10(y) for x, y in beads])}
 
 // e^-(i / 8), Q15; 2^(i / 32), Q14; 64 / ((i + 0.5) / 64 units) as Q10 per unit.
 {row("exp_neg", "i32", exp_neg)}

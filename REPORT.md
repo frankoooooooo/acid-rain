@@ -61,21 +61,26 @@ No setting failed, so no per-block clamp was added.
 
 `acid-rain-work/reference` (outside this repository) renders the same scenes
 through Open303's own `rosic_Open303` (4x oversampled, no sequencer) and
-through Acid Rain, sixteenths at 120 bpm with a 75% gate. Acid Rain runs 6 dB
-under Open303's -12 dB so its accents fit under half scale.
+through Acid Rain, sixteenths at 120 bpm with a 75% gate, at the same level.
 
 | Scene | Level vs Open303 | Brightness (spectral centroid) tracking | Notes |
 | --- | --- | --- | --- |
-| Cutoff sweep | -5.6 dB | r = 1.00 | Acid Rain about 6% darker throughout (1x vs 4x oversampled ladder) |
-| Resonance sweep | -6.2 dB | r = 1.00 | 297 vs 338 Hz at reso 0, 1,344 vs 1,463 Hz at 100 |
-| Env mod sweep | -5.6 dB | r = 1.00 | 6% darker |
-| Decay sweep | -5.6 dB | r = 1.00 | |
-| Accent | -5.6 dB | r = 0.99 | Accent over plain: +11.0 dB (Open303 +10.8 dB) |
-| Slide | -5.7 dB | r = 0.99 | Same 60 ms glide time constant |
-| Saw and square | -5.3 dB | r = 0.95 | Square is a build constant (off) |
+| Cutoff sweep | +0.3 dB | r = 1.00 | Acid Rain about 6% darker throughout (1x vs 4x oversampled ladder) |
+| Resonance sweep | -0.4 dB | r = 1.00 | 297 vs 338 Hz at reso 0, 1,344 vs 1,463 Hz at 100 |
+| Env mod sweep | +0.3 dB | r = 1.00 | 6% darker |
+| Decay sweep | +0.4 dB | r = 1.00 | |
+| Accent | -0.4 dB | r = 0.99 | Accent over plain: +10.1 dB (Open303 +10.8 dB) |
+| Slide | -0.1 dB | r = 0.98 | Same 60 ms glide time constant |
+| Saw and square | +0.6 dB | r = 0.95 | Square is a build constant (off) |
 
-Open303's own accent renders reach full scale; Acid Rain's peak at the half-
-scale ceiling without measurable clipping.
+Open303's own accent renders reach full scale; Acid Rain's pass a cubic soft
+clip that reaches half scale, so its accents saturate a little (brighter than
+Open303's by 15 to 20%) instead of clipping.
+
+Low end: across the scenes Acid Rain's share of energy in every band from 20 Hz
+to 5 kHz is within 1 dB of Open303's, with slightly more sub (20-45 Hz). Raising
+the feedback highpass from 150 to 400 Hz moved the 40-160 Hz share by under
+1 dB, so the filter is unchanged; the level was what was missing.
 
 ## Screen
 
@@ -85,8 +90,8 @@ scale ceiling without measurable clipping.
 | Setting | Nodes changed a frame, average | Peak | At rest |
 | --- | --- | --- | --- |
 | Defaults | 15.0 | 18 | 0 |
-| Heaviest (reso, env mod, decay 2.0 s, dew 100, pH 2, accent auto, slide on) | 20.7 | 49 | 0 |
-| Reduced motion | 2.2 | 20 | 0 |
+| Heaviest (reso, env mod, decay 2.0 s, dew 100, pH 2, accent auto, slide on) | 17.7 | 36 | 0 |
+| Reduced motion | 0.7 | 7 | 0 |
 
 To stay near 20: ripples reach less far, about 12 grid segments and splash
 pixels redraw a frame (the joints furthest out of place first, the rest catch
@@ -95,8 +100,8 @@ The face's two outlines carry most of the water's motion: each redraws as one
 node however many points move.
 
 Every control at 0, 50 and 100 changes the picture (contact sheet in
-`acid-rain-work/frames/contact.png`, not committed). Dew is the subtlest: its
-beads need a few notes of humidity to gather.
+`acid-rain-work/frames/contact.png`, not committed). Dew is the subtlest: it
+shows only as how often splashes and bolt eyes come.
 
 ## Open risks and device checks
 
