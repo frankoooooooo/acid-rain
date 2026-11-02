@@ -270,5 +270,5 @@
 <circle id="acidrain_palette_4" cx="640" cy="0" r="1" fill="#C8C8C8" stroke="#C8C8C8" stroke-width="0.5"/>
 <circle id="acidrain_palette_5" cx="640" cy="0" r="1" fill="#828282" stroke="#828282" stroke-width="0.5"/>
 <circle id="acidrain_palette_6" cx="640" cy="0" r="1" fill="#4A4A4A" stroke="#4A4A4A" stroke-width="0.5"/>
-<circle id="acidrain_palette_7" cx="640" cy="0" r="1" fill="#B4B4B4" stroke="#B4B4B4" stroke-width="0.5"/>
+<circle id="acidrain_palette_7" cx="640" cy="0" r="1" fill="#B4B4B4" stroke="#B4B4B4" stroke-width="3.5"/>
 </g>

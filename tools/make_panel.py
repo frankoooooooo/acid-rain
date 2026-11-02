@@ -15,7 +15,9 @@ import pathlib
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 S, K, Y0 = 160.0, 0.42, 116.0     # pixels per floor unit, slant, the face's centre
 LATTICE = 0.344                  # floor spacing between parallel grid lines
-WEIGHT = 8                       # build constant: the face line, 2.92, 5 or 8 px (bold, as on a rave poster)
+# Build constants for the face, tried out with the tuner (acid-rain-work/tuner):
+OUTLINE, MOUTH, EYES = 8.0, 7.0, 7.0   # line weights on screen, px (bold, as on a rave poster)
+ROTATION = 0.0                        # the face turned on the floor, degrees clockwise from above
 TOP, BOTTOM = 40.0, 220.0        # the grid's band, below the two-page header
 CENTRE = 5                       # moving joints: |m + n| <= CENTRE and |m - n| <= CENTRE
 
@@ -135,6 +137,16 @@ smile = [tick(arc[0], 1)] + arc + [tick(arc[-1], -1)]
 eyes = [(-0.2, -0.22), (0.2, -0.22)]
 
 
+def turn(u, v):
+    """Turns a floor point about the face's centre by ROTATION."""
+    c, s_ = math.cos(math.radians(ROTATION)), math.sin(math.radians(ROTATION))
+    return u * c - v * s_, u * s_ + v * c
+
+
+smile = [turn(u, v) for u, v in smile]
+eyes = [turn(u, v) for u, v in eyes]
+
+
 def resample(polygon, count):
     """`count` points evenly along a closed polygon's perimeter, from its first point."""
     edges = [(polygon[i], polygon[(i + 1) % len(polygon)]) for i in range(len(polygon))]
@@ -158,6 +170,10 @@ eye_oval = [(0.04 * math.sin(2 * math.pi * i / 64), -0.12 * math.cos(2 * math.pi
 # centre; every turn well away from straight back).
 zigzag = [(4.5, -10), (-2.5, -1.5), (3.0, 1.5), (-4.5, 10)]
 eye_bolt = [(x / S, y / (S * K)) for x, y in resample(ribbon(zigzag, 0.4), 64)]
+# Each eye's outlines about its centre, turned with the face; the right eye mirrors the left.
+outline = lambda shape, eye: [turn(du if eye == 0 else -du, dv) for du, dv in shape]
+ovals = [outline(eye_oval, e) for e in range(2)]
+bolts = [outline(eye_bolt, e) for e in range(2)]
 # Pseudo-random pits for the pH corrosion, -1..1: alternating, so the line goes jagged.
 pits = [((-1) ** i) * (0.45 + 0.55 * abs(math.sin(i * 12.9898) * 43758.5453 % 1)) for i in range(64)]
 
@@ -181,8 +197,8 @@ assert NODES <= 224, NODES
 SEGMENT = 32.0  # a grid segment's authored length; its node scales it to the joints
 
 palette = [  # fill, stroke width
-    ("#000000", 0.5), ("#5A5A5A", 0.6), ("#B4B4B4", WEIGHT / 2), ("#B4B4B4", (WEIGHT - 1) / 2),
-    ("#C8C8C8", 0.5), ("#828282", 0.5), ("#4A4A4A", 0.5), ("#B4B4B4", 0.5),
+    ("#000000", 0.5), ("#5A5A5A", 0.6), ("#B4B4B4", OUTLINE / 2), ("#B4B4B4", MOUTH / 2),
+    ("#C8C8C8", 0.5), ("#828282", 0.5), ("#4A4A4A", 0.5), ("#B4B4B4", EYES / 2),
 ]
 
 header_block = (ROOT / "panel.svg.fragment").read_text().split("<!-- SDK two-page header")[1]
@@ -203,16 +219,16 @@ seg = path_d([(0, -0.3), (SEGMENT, -0.3), (SEGMENT, 0.3), (0, 0.3)])
 for i, (a, b) in enumerate(segments):
     out.append(f'<path id="acidrain_node_{GRID + i}" d="{seg}" fill="none" stroke="#5A5A5A" stroke-width="0.6"/>')
 out.append("<!-- The face, painted on the floor over the grid. -->")
-join = ' stroke-linejoin="round"' if WEIGHT >= 5 else ""
+join = ' stroke-linejoin="round"' if OUTLINE >= 5 else ""
 cx, cy = screen(0, 0)
 border_half = [half(u, v) for u, v in border]
-out.append(f'<path id="acidrain_node_0" transform="matrix(1 0 0 1 {fmt(cx)} {fmt(cy)})" d="{path_d(border_half)}" fill="none" stroke="#B4B4B4" stroke-width="{fmt(WEIGHT / 2)}"{join}/>')
-out.append(f'<path id="acidrain_node_1" transform="matrix(1 0 0 1 {fmt(cx)} {fmt(cy)})" d="{path_d(smile_edges)}" fill="none" stroke="#B4B4B4" stroke-width="{fmt((WEIGHT - 1) / 2)}"{join}/>')
+out.append(f'<path id="acidrain_node_0" transform="matrix(1 0 0 1 {fmt(cx)} {fmt(cy)})" d="{path_d(border_half)}" fill="none" stroke="#B4B4B4" stroke-width="{fmt(OUTLINE / 2)}"{join}/>')
+out.append(f'<path id="acidrain_node_1" transform="matrix(1 0 0 1 {fmt(cx)} {fmt(cy)})" d="{path_d(smile_edges)}" fill="none" stroke="#B4B4B4" stroke-width="{fmt(MOUTH / 2)}"{join}/>')
 
 
 for i, (u, v) in enumerate(eyes):
-    points = [half(u + (du if i == 0 else -du), v + dv) for du, dv in eye_oval]  # the right eye mirrors the left
-    out.append(f'<path id="acidrain_node_{2 + i}" transform="matrix(1 0 0 1 {fmt(cx)} {fmt(cy)})" d="{path_d(points)}" fill="none" stroke="#B4B4B4" stroke-width="{fmt((WEIGHT - 1) / 2)}"{join}/>')
+    points = [half(u + du, v + dv) for du, dv in ovals[i]]
+    out.append(f'<path id="acidrain_node_{2 + i}" transform="matrix(1 0 0 1 {fmt(cx)} {fmt(cy)})" d="{path_d(points)}" fill="none" stroke="#B4B4B4" stroke-width="{fmt(EYES / 2)}"{join}/>')
 square = path_d([(-2, -2), (2, -2), (2, 2), (-2, 2)])
 bar = path_d([(-20, -1.5), (0, -1.5), (0, 1.5), (-20, 1.5)])
 dash = path_d([(-4, -1), (4, -1), (4, 1), (-4, 1)])
@@ -286,12 +302,12 @@ const unsigned joint_count = {len(J)}, segment_count = {len(segments)};
 {row("smile_dy", "i32", [q10(smile_edges[i][1] - smile_half[i][1]) for i in range(32)])}
 {row("eye_u", "i32", [q10(u) for u, v in eyes])}
 {row("eye_v", "i32", [q10(v) for u, v in eyes])}
-// The left eye's outline about its centre, floor Q10: the oval at rest, the bolt
-// on an accent. The right eye mirrors it (u negated, order kept).
-{row("oval_u", "i32", [q10(u) for u, v in eye_oval])}
-{row("oval_v", "i32", [q10(v) for u, v in eye_oval])}
-{row("bolt_u", "i32", [q10(u) for u, v in eye_bolt])}
-{row("bolt_v", "i32", [q10(v) for u, v in eye_bolt])}
+// Each eye's outline about its centre, floor Q10, 64 points an eye: the oval at
+// rest, the bolt on an accent.
+{row("oval_u", "i32", [q10(u) for e in range(2) for u, v in ovals[e]])}
+{row("oval_v", "i32", [q10(v) for e in range(2) for u, v in ovals[e]])}
+{row("bolt_u", "i32", [q10(u) for e in range(2) for u, v in bolts[e]])}
+{row("bolt_v", "i32", [q10(v) for e in range(2) for u, v in bolts[e]])}
 
 // e^-(i / 8), Q15; 2^(i / 32), Q14; 64 / ((i + 0.5) / 64 units) as Q10 per unit.
 {row("exp_neg", "i32", exp_neg)}

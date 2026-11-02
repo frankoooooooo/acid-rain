@@ -85,8 +85,8 @@ The tables and artwork are generated; edit the scripts and run them again:
 
 - `tools/make_tables.py` writes `tables.h` (the voice) and `rain_tables.h` (the humidity model).
 - `tools/make_panel.py` writes `panel.svg.fragment` and `display_tables.h`, so
-  the still grid and the moving one share one geometry. `WEIGHT` sets the
-  face's line (2.92, 5 or 8 px; 8 by default); `square_wave` in `engine.cpp` swaps the saw
+  the still grid and the moving one share one geometry. `OUTLINE`, `MOUTH`,
+  `EYES` (line weights, px) and `ROTATION` (the face turned on the floor) set the face; `square_wave` in `engine.cpp` swaps the saw
   for Open303's square.
 - `tools/make_presets.py` writes `presets/`.
 

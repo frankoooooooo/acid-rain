@@ -413,7 +413,7 @@ inline void display(DisplayState& state, const Input& input, Frame& frame) {
     }
 
     // The eyes: outlines of tall ovals that morph into bolts on an accent,
-    // easing over 0.15 s, hold, then ease back. The right eye mirrors the left.
+    // easing over 0.15 s, hold, then ease back.
     state.since_accent += dt;
     const i32 target = state.since_accent < hold ? unit : 0;
     if (still || fresh) state.bolt = target;
@@ -421,9 +421,9 @@ inline void display(DisplayState& state, const Input& input, Frame& frame) {
     if (magnitude(target - state.bolt) < 16) state.bolt = target;
     for (u32 e = 0; e < 2; ++e) {
         for (u32 i = 0; i < 64; ++i) {
-            const i32 a = s::oval_u[i] + (((s::bolt_u[i] - s::oval_u[i]) * state.bolt) >> 10);
-            const i32 u = s::eye_u[e] + (e ? -a : a);
-            const i32 v = s::eye_v[e] + s::oval_v[i] + (((s::bolt_v[i] - s::oval_v[i]) * state.bolt) >> 10);
+            const u32 k = e * 64 + i;
+            const i32 u = s::eye_u[e] + s::oval_u[k] + (((s::bolt_u[k] - s::oval_u[k]) * state.bolt) >> 10);
+            const i32 v = s::eye_v[e] + s::oval_v[k] + (((s::bolt_v[k] - s::oval_v[k]) * state.bolt) >> 10);
             face_shift(state, w, peak, train, inverse, turns, u, v, du, dv);
             screen_point(u, v, du, dv, points[i][0], points[i][1]);
         }
@@ -438,7 +438,8 @@ inline void display(DisplayState& state, const Input& input, Frame& frame) {
     }
     if (fresh) {
         place(frame, 0, px, py, 2 * unit, line, stroke);
-        for (u32 n = 1; n < 4; ++n) place(frame, n, px, py, 2 * unit, smile_line, stroke);
+        place(frame, 1, px, py, 2 * unit, smile_line, stroke);
+        for (u32 n = 2; n < 4; ++n) place(frame, n, px, py, 2 * unit, face, stroke);  // the eyes' own weight
     }
 
     // The grid's centre: each joint refracted, each segment turned and scaled
