@@ -169,7 +169,7 @@ eye_oval = [(0.04 * math.sin(2 * math.pi * i / 64), -0.12 * math.cos(2 * math.pi
 # the bold stroke draws a crisp lightning stroke (screen px about the eye's
 # centre; every turn well away from straight back).
 zigzag = [(4.5, -10), (-2.5, -1.5), (3.0, 1.5), (-4.5, 10)]
-eye_bolt = [(x / S, y / (S * K)) for x, y in resample(ribbon(zigzag, 0.2), 64)]
+eye_bolt = [(x / S, y / (S * K)) for x, y in resample(ribbon(zigzag, 0.4), 64)]
 # Each eye's outlines about its centre, turned with the face; the right eye mirrors the left.
 outline = lambda shape, eye: [turn(du if eye == 0 else -du, dv) for du, dv in shape]
 ovals = [outline(eye_oval, e) for e in range(2)]

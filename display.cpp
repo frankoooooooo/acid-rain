@@ -194,16 +194,17 @@ static inline void smooth(i32 (*d)[2], u32 count, bool closed) {
         }
 }
 
-// Takes an outline's new points (Q10 px) when any moved half a pixel or more,
-// snapped to half pixels; true when it changed, so its path redraws.
+// Takes an outline's new points (Q10 px) when any moved half a pixel or more;
+// true when it changed, so its path redraws. Points stay exact (unsnapped), so
+// a ribbon's two edges keep their spacing.
 static inline bool commit(i32 (*placed)[2], const i32 (*points)[2], u32 count, bool fresh) {
     bool moved = fresh;
     for (u32 i = 0; i < count && !moved; ++i)
         moved = magnitude(points[i][0] - placed[i][0]) >= 512 || magnitude(points[i][1] - placed[i][1]) >= 512;
     if (moved)
         for (u32 i = 0; i < count; ++i) {
-            placed[i][0] = snap(points[i][0]);
-            placed[i][1] = snap(points[i][1]);
+            placed[i][0] = points[i][0];
+            placed[i][1] = points[i][1];
         }
     return moved;
 }
