@@ -8,7 +8,7 @@ are still to do.
 
 | | Acid Rain | ACIDXY |
 | --- | --- | --- |
-| `sdk.py test` estimate, heaviest setting | 31,900–36,700 (varies run to run) | 30,500 |
+| `sdk.py test` estimate, heaviest setting | 31,900–36,700 on a Mac (varies run to run); 22,000 on GitHub CI | 30,500 on the same Mac |
 | Hardware readout (`opxy-synth-c8-sweep-v1`) | not measured yet | 6.08% default, 7.72% heaviest (Wav Dist) |
 
 The estimate does **not** put Acid Rain under ACIDXY. It is skewed by the
