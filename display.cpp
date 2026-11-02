@@ -178,6 +178,22 @@ static inline void face_shift(const DisplayState& state, const Water& w, const i
     dv = clamp(dv, -face_reach_v, face_reach_v);
 }
 
+// Two passes of a 1-2-1 average over an outline's shifts, so neighbouring
+// points move together. A closed outline wraps; an open one keeps its ends.
+static inline void smooth(i32 (*d)[2], u32 count, bool closed) {
+    for (u32 pass = 0; pass < 2; ++pass)
+        for (u32 c = 0; c < 2; ++c) {
+            const i32 first = d[0][c];
+            i32 previous = closed ? d[count - 1][c] : d[0][c];
+            for (u32 i = 0; i < count; ++i) {
+                const i32 next = i + 1 < count ? d[i + 1][c] : closed ? first : d[i][c];
+                const i32 here = d[i][c];
+                d[i][c] = (previous + 2 * here + next) >> 2;
+                previous = here;
+            }
+        }
+}
+
 // Takes an outline's new points (Q10 px) when any moved half a pixel or more,
 // snapped to half pixels; true when it changed, so its path redraws.
 static inline bool commit(i32 (*placed)[2], const i32 (*points)[2], u32 count, bool fresh) {
@@ -377,10 +393,20 @@ inline void display(DisplayState& state, const Input& input, Frame& frame) {
     const i32 px = snap(s::centre_x), py = snap(s::centre_y);
 
     // The border: refracted, and pitted where the water moves it as the pH
-    // falls (up to 3 px). At rest it is smooth.
-    i32 points[64][2];
+    // falls (up to 3 px). At rest it is smooth. It moves only across its line
+    // (radially), never along it, and its shift is smoothed over neighbouring
+    // points, so tight rings can't bunch the points up.
+    i32 points[64][2], shifts[64][2];
     for (u32 i = 0; i < 64; ++i) {
         face_shift(state, w, peak, train, inverse, turns, s::border_u[i], s::border_v[i], du, dv);
+        const i32 across = ((du * s::border_u[i] + dv * s::border_v[i]) * 1708) >> 20;  // along the radius, / 0.6 units
+        shifts[i][0] = (across * s::border_u[i] * 1708) >> 20;
+        shifts[i][1] = (across * s::border_v[i] * 1708) >> 20;
+    }
+    smooth(shifts, 64, true);
+    for (u32 i = 0; i < 64; ++i) {
+        du = shifts[i][0];
+        dv = shifts[i][1];
         const i32 moving = clamp(magnitude(du) + magnitude(dv), 0, 32) * 32;  // Q10: 1 once it moves about 4 px
         const i32 pit = (((s::pits[i] * acid) >> 10) * moving) >> 10;  // Q10, -1..1
         const i32 u = s::border_u[i] + du + ((s::border_u[i] * pit) >> 10) * 3 / 99;
@@ -395,11 +421,12 @@ inline void display(DisplayState& state, const Input& input, Frame& frame) {
             frame.paths[0].points[i].y = clamp((state.border[i][1] - py) >> 1, -reach, reach);
         }
     }
-    // The smile: a thin ribbon around its refracted centre line.
-    for (u32 i = 0; i < 32; ++i) {
-        face_shift(state, w, peak, train, inverse, turns, s::smile_u[i], s::smile_v[i], du, dv);
-        screen_point(s::smile_u[i], s::smile_v[i], du, dv, points[i][0], points[i][1]);
-    }
+    // The smile: a thin ribbon around its refracted, smoothed centre line.
+    for (u32 i = 0; i < 32; ++i)
+        face_shift(state, w, peak, train, inverse, turns, s::smile_u[i], s::smile_v[i], shifts[i][0], shifts[i][1]);
+    smooth(shifts, 32, false);
+    for (u32 i = 0; i < 32; ++i)
+        screen_point(s::smile_u[i], s::smile_v[i], shifts[i][0], shifts[i][1], points[i][0], points[i][1]);
     if (commit(state.smile, points, 32, fresh)) {
         state.keys[1] = state.keys[1] % 0xfffffff0u + 1;
         frame.paths[1].key = state.keys[1];
@@ -420,13 +447,16 @@ inline void display(DisplayState& state, const Input& input, Frame& frame) {
     else state.bolt += ((target - state.bolt) * (dt > 154 ? 1024 : dt * 1024 / 51 > 1024 ? 1024 : dt * 1024 / 51)) >> 10;
     if (magnitude(target - state.bolt) < 16) state.bolt = target;
     for (u32 e = 0; e < 2; ++e) {
+        i32 rest[64][2];
         for (u32 i = 0; i < 64; ++i) {
             const u32 k = e * 64 + i;
-            const i32 u = s::eye_u[e] + s::oval_u[k] + (((s::bolt_u[k] - s::oval_u[k]) * state.bolt) >> 10);
-            const i32 v = s::eye_v[e] + s::oval_v[k] + (((s::bolt_v[k] - s::oval_v[k]) * state.bolt) >> 10);
-            face_shift(state, w, peak, train, inverse, turns, u, v, du, dv);
-            screen_point(u, v, du, dv, points[i][0], points[i][1]);
+            rest[i][0] = s::eye_u[e] + s::oval_u[k] + (((s::bolt_u[k] - s::oval_u[k]) * state.bolt) >> 10);
+            rest[i][1] = s::eye_v[e] + s::oval_v[k] + (((s::bolt_v[k] - s::oval_v[k]) * state.bolt) >> 10);
+            face_shift(state, w, peak, train, inverse, turns, rest[i][0], rest[i][1], shifts[i][0], shifts[i][1]);
         }
+        smooth(shifts, 64, true);
+        for (u32 i = 0; i < 64; ++i)
+            screen_point(rest[i][0], rest[i][1], shifts[i][0], shifts[i][1], points[i][0], points[i][1]);
         if (commit(state.eyes[e], points, 64, fresh)) {
             state.keys[2 + e] = state.keys[2 + e] % 0xfffffff0u + 1;
             frame.paths[2 + e].key = state.keys[2 + e];

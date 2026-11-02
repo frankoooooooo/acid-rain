@@ -53,6 +53,14 @@ static long long closest(const DisplayState& state) {
 }
 
 static long long nearest = 1LL << 40;  // over every frame played
+static double bunching = 1;             // the tightest neighbouring border points, as a share of their spacing at rest
+static double rest_spacing[64];
+
+static double spacing(const DisplayState& state, u32 i) {
+    const double dx = (state.border[(i + 1) % 64][0] - state.border[i][0]) / 1024.0;
+    const double dy = (state.border[(i + 1) % 64][1] - state.border[i][1]) / 1024.0;
+    return __builtin_sqrt(dx * dx + dy * dy);
+}
 
 static void play(const char* name, const i32 (&slots)[8], double& average, u32& peak, u32& at_rest, bool reduced = false) {
     static DisplayState state;
@@ -93,6 +101,10 @@ static void play(const char* name, const i32 (&slots)[8], double& average, u32& 
         }
         const long long gap = closest(state);
         nearest = gap < nearest ? gap : nearest;
+        for (u32 i = 0; i < 64; ++i) {
+            if (n == 0) rest_spacing[i] = spacing(state, i);
+            else if (spacing(state, i) / rest_spacing[i] < bunching) bunching = spacing(state, i) / rest_spacing[i];
+        }
         if (n == 0) continue;
         u32 count = 0;
         for (u32 i = 0; i < Screen::node_count; ++i) count += !same(frame.nodes[i], last.nodes[i]);
@@ -125,6 +137,9 @@ int main() {
     // The face's lines never meet: smile and eyes stay 3 px or more inside the border.
     std::printf("closest approach of smile or eye to the border: %.1f px\n", __builtin_sqrt(static_cast<double>(nearest)));
     check("the face's lines never meet", nearest >= 9);
+    // The border's points never bunch up: neighbours keep half their spacing at rest.
+    std::printf("tightest border spacing: %.0f%% of rest\n", bunching * 100);
+    check("the border never bunches", bunching >= 0.5);
     check("reduced motion: still at rest", rest == 0);
     return failures ? 1 : 0;
 }

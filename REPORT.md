@@ -95,8 +95,10 @@ the feedback highpass from 150 to 400 Hz moved the 40-160 Hz share by under
 
 The face is four outlines (border, smile, two eyes), each redrawn as one node.
 The water moves a face point at most 4 px and a grid joint 8 px however many
-drops overlap, so the smile and eyes stay at least 7.3 px inside the border
-(checked over the heaviest run).
+drops overlap, so the smile and eyes stay at least 5 px inside the border
+(checked over the heaviest run). The border moves only across its line and
+each outline's shift is smoothed over neighbouring points, so its points never
+bunch: neighbours keep at least 62% of their spacing at rest (34% before).
 
 To stay near 20: ripples reach less far, about 12 grid segments and splash
 pixels redraw a frame (the joints furthest out of place first, the rest catch

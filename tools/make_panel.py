@@ -16,8 +16,8 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 S, K, Y0 = 160.0, 0.42, 116.0     # pixels per floor unit, slant, the face's centre
 LATTICE = 0.344                  # floor spacing between parallel grid lines
 # Build constants for the face, tried out with the tuner (acid-rain-work/tuner):
-OUTLINE, MOUTH, EYES = 8.0, 7.0, 7.0   # line weights on screen, px (bold, as on a rave poster)
-ROTATION = 0.0                        # the face turned on the floor, degrees clockwise from above
+OUTLINE, MOUTH, EYES = 3.5, 2.0, 1.5   # line weights on screen, px
+ROTATION = -45.0                       # the face turned on the floor, degrees clockwise from above
 TOP, BOTTOM = 40.0, 220.0        # the grid's band, below the two-page header
 CENTRE = 5                       # moving joints: |m + n| <= CENTRE and |m - n| <= CENTRE
 
@@ -169,7 +169,7 @@ eye_oval = [(0.04 * math.sin(2 * math.pi * i / 64), -0.12 * math.cos(2 * math.pi
 # the bold stroke draws a crisp lightning stroke (screen px about the eye's
 # centre; every turn well away from straight back).
 zigzag = [(4.5, -10), (-2.5, -1.5), (3.0, 1.5), (-4.5, 10)]
-eye_bolt = [(x / S, y / (S * K)) for x, y in resample(ribbon(zigzag, 0.4), 64)]
+eye_bolt = [(x / S, y / (S * K)) for x, y in resample(ribbon(zigzag, 0.2), 64)]
 # Each eye's outlines about its centre, turned with the face; the right eye mirrors the left.
 outline = lambda shape, eye: [turn(du if eye == 0 else -du, dv) for du, dv in shape]
 ovals = [outline(eye_oval, e) for e in range(2)]
@@ -180,7 +180,7 @@ pits = [((-1) ** i) * (0.45 + 0.55 * abs(math.sin(i * 12.9898) * 43758.5453 % 1)
 # Half-size pixel offsets (the face's nodes sit at scale 2 on its centre).
 half = lambda u, v: (S * u / 2, S * K * v / 2)
 smile_half = [half(u, v) for u, v in smile]
-smile_edges = ribbon(smile_half, 0.3)
+smile_edges = ribbon(smile_half, 0.15)  # 0.6 px apart on screen: the stroke draws over the gap
 
 # --- Nodes ---------------------------------------------------------------------
 PATHS = 4                     # border, smile and two eyes: nodes 0..3
@@ -197,7 +197,7 @@ assert NODES <= 224, NODES
 SEGMENT = 32.0  # a grid segment's authored length; its node scales it to the joints
 
 palette = [  # fill, stroke width
-    ("#000000", 0.5), ("#5A5A5A", 0.6), ("#B4B4B4", OUTLINE / 2), ("#B4B4B4", MOUTH / 2),
+    ("#000000", 0.5), ("#5A5A5A", 0.6), ("#B4B4B4", OUTLINE / 2), ("#B4B4B4", max(MOUTH - 0.6, 0.5) / 2),
     ("#C8C8C8", 0.5), ("#828282", 0.5), ("#4A4A4A", 0.5), ("#B4B4B4", EYES / 2),
 ]
 
@@ -223,7 +223,7 @@ join = ' stroke-linejoin="round"' if OUTLINE >= 5 else ""
 cx, cy = screen(0, 0)
 border_half = [half(u, v) for u, v in border]
 out.append(f'<path id="acidrain_node_0" transform="matrix(1 0 0 1 {fmt(cx)} {fmt(cy)})" d="{path_d(border_half)}" fill="none" stroke="#B4B4B4" stroke-width="{fmt(OUTLINE / 2)}"{join}/>')
-out.append(f'<path id="acidrain_node_1" transform="matrix(1 0 0 1 {fmt(cx)} {fmt(cy)})" d="{path_d(smile_edges)}" fill="none" stroke="#B4B4B4" stroke-width="{fmt(MOUTH / 2)}"{join}/>')
+out.append(f'<path id="acidrain_node_1" transform="matrix(1 0 0 1 {fmt(cx)} {fmt(cy)})" d="{path_d(smile_edges)}" fill="none" stroke="#B4B4B4" stroke-width="{fmt(max(MOUTH - 0.6, 0.5) / 2)}"{join}/>')
 
 
 for i, (u, v) in enumerate(eyes):
