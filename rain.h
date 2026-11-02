@@ -37,8 +37,8 @@ static inline bool rain_note(Rain& rain, opxy::u32 blocks, opxy::i32 ph, opxy::i
     const opxy::i32* const t = rain_tables::threshold;
     const opxy::i32 threshold = index >= 32 ? t[32] : t[index] + multiply(t[index + 1] - t[index], fraction);
     if (rain.fast + rain.slow < threshold) return false;
-    // It rains: one accent, up to three in a cluster as the pH falls.
-    rain.pending = static_cast<opxy::u32>(acidity(ph) * 3 >> 15);  // 0..2 more
+    // It rains: one accent, two in a row once the pH is under 4.5.
+    rain.pending = acidity(ph) >= 16384 ? 1 : 0;
     // The rain spends a threshold's worth of water, the fast store's first.
     rain.fast -= threshold;
     if (rain.fast < 0) {

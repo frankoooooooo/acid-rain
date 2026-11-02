@@ -17,10 +17,10 @@ const bool square_wave = false;  // build constant: the saw through Open303's sq
 const i32 one = 1 << 24;
 const i32 full = 0x7fffffff;
 const i32 build_step = 858993459;   // 0.4 of the way to full on each accent
-const i32 accent_level = 1 << 29;   // an accent adds 2.0 x the filter envelope to the amp (Open303: 4 x accent)
-const i32 envelope_level = 241591910;  // and every note 0.45 x, both Q31 / 4
+const i32 accent_level = 1 << 30;   // an accent adds 4 x the filter envelope to the amp, as Open303 at accent 100
+const i32 envelope_level = 120795955;  // and every note 0.45 x, both Q31 / 8
 const u32 short_blocks = 48;        // a short gate closes after 70 ms
-const i32 silent = 1 << 17;         // the amp under -84 dB: nothing more to hear
+const i32 silent = 1 << 16;         // the amp under -84 dB: nothing more to hear
 enum Choice { off = 0, on = 1, automatic = 2 };
 
 // An enum control's choice: off, on or auto.
@@ -198,15 +198,15 @@ inline void render(Voice& voice, Shared& shared, u32 owner, opxy::Output output,
     gain = (gain + multiply(gain, r)) << 11;                     // 2 g / 32, Q31
 
     // The VCA: Open303's amp envelope, plus 0.45 of the filter envelope, plus
-    // more under accent; Q31 / 4. The short gate closes all of it.
-    i32 vca = (voice.amp >> 2) + multiply(voice.envelope, envelope_level) + (accented ? multiply(voice.envelope, accent_level) : 0);
+    // more under accent; Q31 / 8. The short gate closes all of it.
+    i32 vca = (voice.amp >> 3) + multiply(voice.envelope, envelope_level) + (accented ? multiply(voice.envelope, accent_level) : 0);
     vca = multiply(vca, voice.gate);
     if (vca < silent) {  // under -84 dB, and it only falls from here
         voice.lane |= lane_quiet;
         for (unsigned i = 0; i < opxy::block_frames; ++i) output[i] = 0;
         return;
     }
-    const i32 level = multiply(gain, vca);  // 2 g vca / 128
+    const i32 level = multiply(gain, vca);  // 2 g vca / 256
 
     // pH corrosion: deeper as the pH falls and over consecutive accents. pH 7 skips it.
     const i32 acid = acidity(parameters[6]);
@@ -273,7 +273,7 @@ inline void render(Voice& voice, Shared& shared, u32 owner, opxy::Output output,
     i32 hx1 = voice.hx1, hx2 = voice.hx2, hy1 = voice.hy1, hy2 = voice.hy2;
     i32 gain_now = voice.level;
     const i32 dgain = (level - gain_now) >> 6;
-    const i32 ceiling = 1 << 18;  // 2 g vca y / 128 at this, << 12, is half scale
+    const i32 ceiling = 1 << 18;  // 2 g vca y / 256 at this, << 12, is half scale
     for (unsigned i = 0; i < opxy::block_frames; ++i) {
         const i32 x = output[i];
         const i32 y = (multiply(t::hp_b0, x - 2 * hx1 + hx2) - multiply(t::hp_a1, hy1) - multiply(t::hp_a2, hy2)) * 2;
@@ -281,11 +281,11 @@ inline void render(Voice& voice, Shared& shared, u32 owner, opxy::Output output,
         gain_now += dgain;
         i32 m = multiply(y, gain_now);
         if (corrosion) {
-            const i32 folded = shape(t::fold, m + multiply(m, acid << 16), 11) >> 7;
+            const i32 folded = shape(t::fold, m + multiply(m, acid << 16), 10) >> 8;
             m += multiply(folded - m, corrosion);
         }
         m = m > ceiling ? ceiling : m < -ceiling ? -ceiling : m;
-        output[i] = m * 4096;
+        output[i] = m * 4096;  // 6 dB under Open303 at -12 dB, so its accents fit under half scale
     }
     voice.hx1 = hx1; voice.hx2 = hx2; voice.hy1 = hy1; voice.hy2 = hy2;
     voice.level = level;
