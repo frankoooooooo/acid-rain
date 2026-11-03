@@ -42,6 +42,8 @@ or `off` always wins, and `auto` hands that step to the rain.
   on the notes you hear accented.
 - **Monophonic slides**: a slide closes the note it replaces within about 5 ms,
   so the glide carries the line alone even on a polyphonic track.
+- **Body**: as resonance rises, the band under 150 Hz is added back (up to
+  +4 dB at full resonance), so the squelch doesn't thin the bass.
 - **The drizzle** (slide on `auto`): each note also adds to a drizzle store
   that dries with time. When it crosses a threshold set by pH, that note
   slides in: dense playing slides more, gaps dry it out, and at pH 7 only
@@ -90,7 +92,8 @@ The tables and artwork are generated; edit the scripts and run them again:
 - `tools/make_panel.py` writes `panel.svg.fragment` and `display_tables.h`, so
   the still grid and the moving one share one geometry. `OUTLINE`, `MOUTH`,
   `EYES` (line weights, px) and `ROTATION` (the face turned on the floor) set the face; `square_wave` in `engine.cpp` swaps the saw
-  for Open303's square.
+  for Open303's square, and `sub_level` (0, off) mixes in a clean sine an
+  octave below the played note.
 - `tools/make_presets.py` writes `presets/`.
 
 `tests/sound.cpp` checks the headroom at every corner (with stacked accents and

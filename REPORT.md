@@ -136,7 +136,7 @@ Checked with [operator-design](https://github.com/thoughtgrain/operator-design).
 
 ## Open risks and device checks
 
-- **Hardware CPU**: measured, 3.185% heaviest over three runs (under the recommended 3.5%), for `a355b2b`. A later change to machine source needs a new measurement.
+- **Hardware CPU**: measured, 3.185% heaviest over three runs (under the recommended 3.5%), for `a355b2b`. The revision after it adds resonance body compensation (two multiplies a sample) and the off-by-default sub, so it needs a new sweep before any catalog submission.
 - **Late locks**: accent and slide are latched on a note's first block and
   accepted on its second. Check on the device that an accent lock on every
   other step sounds accented from its first block.

@@ -11,6 +11,8 @@ struct Voice {
     opxy::i32 y1, y2, y3, y4;        // TB-303 ladder stages
     opxy::i32 feedback_low, pre_low; // 150 Hz feedback and 44 Hz input highpasses (their lowpass halves)
     opxy::i32 hx1, hx2, hy1, hy2;    // the merged output highpass
+    opxy::i32 body_low;              // the band under 150 Hz, for resonance body compensation
+    opxy::u32 sub_phase;             // the octave sub's phase (a build constant; off by default)
     opxy::i32 envelope;              // filter envelope, Q31
     opxy::i32 sweep;                 // its 15 ms smoothed copy while accented: the accent sweep, Q31
     opxy::i32 amp;                   // amp envelope, Q31

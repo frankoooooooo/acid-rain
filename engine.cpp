@@ -6,7 +6,8 @@
 // at 1x: a polyBLEP saw, Open303's TB_303 ladder with its feedback highpass and
 // measured envelope-to-cutoff mapping, its accent and its amp envelope. Every
 // coefficient is worked out once a block and ramped across it. On top: accent
-// and slide lanes (off, on, or auto: the rain decides), and pH corrosion.
+// and slide lanes (off, on, or auto: the rain decides), pH corrosion, and
+// resonance body compensation.
 namespace acidrain {
 using opxy::i32;
 using opxy::u32;
@@ -14,6 +15,7 @@ using opxy::q31::multiply;
 namespace t = tables;
 
 const bool square_wave = false;  // build constant: the saw through Open303's square shaper
+const i32 sub_level = 0;         // build constant: an octave-down sine under the voice, as a share (Q31); 0 leaves it out
 const i32 one = 1 << 24;
 const i32 full = 0x7fffffff;
 const i32 build_step = 858993459;   // 0.4 of the way to full on each accent
@@ -190,6 +192,10 @@ inline void render(Voice& voice, Shared& shared, u32 owner, opxy::Output output,
     }
     const i32 level = multiply(gain, vca);  // 2 g vca / 256
 
+    // Resonance body compensation: up to 0.6 of the band under 150 Hz added
+    // back as resonance rises, so the squelch doesn't thin the bass.
+    const i32 body = multiply(t::body_most, r);
+
     // pH corrosion: deeper as the pH falls and over consecutive accents. pH 7 skips it.
     const i32 acid = acidity(parameters[6]);
     const i32 corrosion = acid ? multiply(acid << 16, (1 << 29) + multiply(shared.build, 1610612736)) : 0;  // acid (0.25 + 0.75 build)
@@ -250,17 +256,27 @@ inline void render(Voice& voice, Shared& shared, u32 owner, opxy::Output output,
     voice.b0x2 = b0x2;
     voice.feedback = feedback;
 
-    // Output highpass (Open303's highpass2 and notch, merged), the VCA ramp,
-    // corrosion, and a cubic soft clip that reaches half scale.
-    i32 hx1 = voice.hx1, hx2 = voice.hx2, hy1 = voice.hy1, hy2 = voice.hy2;
+    // Output highpass (Open303's highpass2 and notch, merged), body
+    // compensation, the VCA ramp, the sub, corrosion, and a cubic soft clip
+    // that reaches half scale.
+    i32 hx1 = voice.hx1, hx2 = voice.hx2, hy1 = voice.hy1, hy2 = voice.hy2, body_low = voice.body_low;
+    u32 sub_phase = voice.sub_phase;
     i32 gain_now = voice.level;
     const i32 dgain = (level - gain_now) >> 6;
     for (unsigned i = 0; i < opxy::block_frames; ++i) {
         const i32 x = output[i];
         const i32 y = (multiply(t::hp_b0, x - 2 * hx1 + hx2) - multiply(t::hp_a1, hy1) - multiply(t::hp_a2, hy2)) * 2;
         hx2 = hx1; hx1 = x; hy2 = hy1; hy1 = y;
+        body_low += multiply(y - body_low, t::body_lowpass);
         gain_now += dgain;
-        i32 m = multiply(y, gain_now);
+        i32 m = multiply(y + multiply(body_low, body), gain_now);
+        if (sub_level) {
+            // An octave below the played pitch, glide and octave jump included.
+            sub_phase += ((pitch[i] << octave) + static_cast<u32>(offset + slope * static_cast<i32>(i >> 1))) >> 1;
+            const u32 at = sub_phase >> 24;
+            const i32 sine = t::sine[at] + ((t::sine[at + 1] - t::sine[at]) >> 8) * static_cast<i32>(sub_phase >> 16 & 255);
+            m += multiply(multiply(sine, sub_level), gain_now);
+        }
         if (corrosion) {
             const i32 folded = shape(t::fold, m + multiply(m, acid << 16), 10) >> 8;
             m += multiply(folded - m, corrosion);
@@ -273,6 +289,8 @@ inline void render(Voice& voice, Shared& shared, u32 owner, opxy::Output output,
         output[i] = (u - (cube * 10923 >> 15)) * 49150;  // at most 21846 x 49150 < 2^30
     }
     voice.hx1 = hx1; voice.hx2 = hx2; voice.hy1 = hy1; voice.hy2 = hy2;
+    voice.body_low = body_low;
+    voice.sub_phase = sub_phase;
     voice.level = level;
     if (newest) {
         shared.increment = (pitch[opxy::block_frames - 1] << octave) + static_cast<u32>(voice.offset);

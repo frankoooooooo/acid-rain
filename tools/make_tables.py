@@ -55,6 +55,8 @@ for i in range(257):
 # The square (a build constant): the saw through a steep shaper, Open303's
 # SQUARE303 recipe, over x in [-1, 1).
 SQUARE = [q(math.tanh(6.0 * math.sin(math.pi * (i - 128) / 128.0)) * 0.9, 24) for i in range(257)]
+# One turn of sine for the octave sub, Q24, read by phase.
+SINE = [q(math.sin(2 * math.pi * i / 256), 24) for i in range(257)]
 
 # Highpass2 (24.167 Hz one-pole) and the 7.5 Hz, 4.7-octave notch merged into
 # one fixed biquad: a second-order highpass at 30 Hz, Q 0.55, fitted by ear
@@ -87,6 +89,8 @@ const i32 cutoff_steps = {OCTAVES * OCT_STEPS};  // {OCT_STEPS} per octave above
 {row("fold", "i32", FOLD)}
 // The square, from the saw, over [-1, 1), Q24.
 {row("square", "i32", SQUARE)}
+// The octave sub: one turn of sine, Q24.
+{row("sine", "i32", SINE)}
 // Open303's accent decay (200 ms), its amp envelope (1.23 s), its 15 ms accent
 // smoother, the 60 ms slide, the 5 ms short-gate close, per block, Q31.
 const i32 accent_decay = {per_block(0.2)};
@@ -100,6 +104,10 @@ const i32 build_decay = {per_block(0.4)};
 // (150 Hz): their lowpass halves, Q31.
 const i32 input_highpass = {q31(2 * math.pi * 44.486 / FS)};
 const i32 feedback_highpass = {q31(2 * math.pi * 150 / FS)};
+// Resonance body compensation: the low band below 150 Hz, its one-pole
+// coefficient (Q31), added back with up to 0.6 of itself at full resonance.
+const i32 body_lowpass = {q31(1 - math.exp(-2 * math.pi * 150 / FS))};
+const i32 body_most = {q31(0.6)};
 // The merged output highpass: b0, b1, b2, a1, a2 in Q30.
 const i32 hp_b0 = {q(hp[0], 30)}, hp_b1 = {q(hp[1], 30)}, hp_b2 = {q(hp[2], 30)};
 const i32 hp_a1 = {q(hp[3], 30)}, hp_a2 = {q(hp[4], 30)};
