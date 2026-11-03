@@ -215,6 +215,28 @@ static inline void guard(const i32 (*rest)[2], i32 (*d)[2], u32 count, bool clos
     }
 }
 
+// Keeps an outline the device can draw: neighbouring points at least 0.16 px
+// apart (it merges closer ones) and a closing edge of at least 0.26 px (a
+// shorter one draws a sliver). A point that crowds the one before it is pushed
+// on along their line. Path px, Q10.
+static inline void space(Frame::path_type& path) {
+    const i32 gap = 164, closing = 267;
+    for (u32 pass = 0; pass < 2; ++pass)
+        for (u32 i = 0; i < Frame::point_count; ++i) {
+            const bool last = i + 1 == Frame::point_count;
+            Point& a = path.points[last ? 0 : i];
+            Point& b = path.points[last ? i : i + 1];  // the closing edge moves its last point
+            const i32 want = last ? closing : gap;
+            i32 dx = b.x - a.x, dy = b.y - a.y;
+            const i32 length = static_cast<i32>(root(static_cast<u32>(dx * dx + dy * dy)));
+            if (length >= want) continue;
+            if (length == 0) { dx = want; dy = 0; }
+            else { dx = dx * want / length; dy = dy * want / length; }
+            b.x = clamp(a.x + dx, -path_extent * unit, path_extent * unit);
+            b.y = clamp(a.y + dy, -path_extent * unit, path_extent * unit);
+        }
+}
+
 // Takes an outline's new points (Q10 px) when any moved half a pixel or more;
 // true when it changed, so its path redraws. Points stay exact (unsnapped), so
 // a ribbon's two edges keep their spacing.
@@ -470,6 +492,7 @@ inline void display(DisplayState& state, const Input& input, Frame& frame) {
             frame.paths[0].points[i].x = clamp((state.border[i][0] - px) >> 1, -reach, reach);
             frame.paths[0].points[i].y = clamp((state.border[i][1] - py) >> 1, -reach, reach);
         }
+        space(frame.paths[0]);
     }
     // The smile: a thin ribbon around its refracted, smoothed centre line.
     for (u32 i = 0; i < 32; ++i) {
@@ -491,6 +514,7 @@ inline void display(DisplayState& state, const Input& input, Frame& frame) {
             frame.paths[1].points[63 - i].x = x - s::smile_dx[i];
             frame.paths[1].points[63 - i].y = y - s::smile_dy[i];
         }
+        space(frame.paths[1]);
     }
 
     // The eyes: outlines of tall ovals that morph into bolts on an accent,
@@ -518,6 +542,7 @@ inline void display(DisplayState& state, const Input& input, Frame& frame) {
                 frame.paths[2 + e].points[i].x = clamp((state.eyes[e][i][0] - px) >> 1, -reach, reach);
                 frame.paths[2 + e].points[i].y = clamp((state.eyes[e][i][1] - py) >> 1, -reach, reach);
             }
+            space(frame.paths[2 + e]);
         }
     }
     if (fresh) {

@@ -181,8 +181,22 @@ eye_oval = [(0.04 * math.sin(2 * math.pi * i / 64), -0.12 * math.cos(2 * math.pi
 zigzag = [(4.5, -10), (-2.5, -1.5), (3.0, 1.5), (-4.5, 10)]
 eye_bolt = [(x / S, y / (S * K)) for x, y in resample(ribbon(zigzag, 0.4), 64)]
 # Each eye's outlines about its centre, turned with the face; the right eye mirrors the left.
-outline = lambda shape, eye: [turn(du if eye == 0 else -du, dv) for du, dv in shape]
-ovals = [outline(eye_oval, e) for e in range(2)]
+fine_oval = [(0.04 * math.sin(2 * math.pi * i / 512), -0.12 * math.cos(2 * math.pi * i / 512)) for i in range(512)]
+
+
+def outline(shape, eye):
+    """An eye's outline turned with the face, then 64 points spaced evenly along it
+    as drawn on screen, starting from its top: turned and slanted, a thin oval
+    sampled by angle bunches its points at the ends (closer than the device's
+    1/8 px, with a closing edge under 1/4 px)."""
+    turned = [turn(du if eye == 0 else -du, dv) for du, dv in shape]
+    drawn = [(S * u, S * K * v) for u, v in turned]
+    top = min(range(len(drawn)), key=lambda k: drawn[k][1])
+    drawn = drawn[top:] + drawn[:top]
+    return [(x / S, y / (S * K)) for x, y in resample(drawn, 64)]
+
+
+ovals = [outline(fine_oval, e) for e in range(2)]
 bolts = [outline(eye_bolt, e) for e in range(2)]
 # Pseudo-random pits for the pH corrosion, -1..1: alternating, so the line goes jagged.
 # Corrosion lumps for the pH, -1..1 along the border: two slow waves (12 and 7
@@ -216,6 +230,8 @@ palette = [  # fill, stroke width
 
 header_block = (ROOT / "panel.svg.fragment").read_text().split("<!-- SDK two-page header")[1]
 header_block = "<!-- SDK two-page header" + header_block.split("\n\n")[0]
+# Explicit paint on every leaf: the header cover has no stroke.
+header_block = header_block.replace('L0,38 Z" fill="#000000"/>', 'L0,38 Z" fill="#000000" stroke="none"/>')
 # The header's eight bar nodes follow the paths (the generated block names 2..9 first).
 bars = re.findall(r'acidrain_node_(\d+)"', header_block)
 for k, old in enumerate(bars):

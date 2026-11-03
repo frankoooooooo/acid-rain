@@ -57,6 +57,20 @@ static double bunching = 1;             // the tightest neighbouring border poin
 static double rest_spacing[64];
 static double sharpest = 0;             // the most turn the water adds at any border point, degrees
 static double rest_turn[64];
+static double tightest_gap = 1e9, shortest_close = 1e9;  // over every outline and frame, path px
+
+// The device merges outline points closer than 1/8 px and draws a sliver from a
+// closing edge under 1/4 px (open-xy docs/display.md).
+static void outlines(const Screen& frame) {
+    for (u32 p = 0; p < Screen::path_count; ++p)
+        for (u32 i = 0; i < Screen::point_count; ++i) {
+            const opxy::draw::Point& a = frame.paths[p].points[i];
+            const opxy::draw::Point& b = frame.paths[p].points[(i + 1) % Screen::point_count];
+            const double dx = (b.x - a.x) / 1024.0, dy = (b.y - a.y) / 1024.0, gap = __builtin_sqrt(dx * dx + dy * dy);
+            tightest_gap = gap < tightest_gap ? gap : tightest_gap;
+            if (i + 1 == Screen::point_count) shortest_close = gap < shortest_close ? gap : shortest_close;
+        }
+}
 
 static double turning(const DisplayState& state, u32 i) {
     const i32* a = state.border[(i + 63) % 64];
@@ -110,6 +124,7 @@ static void play(const char* name, const i32 (&slots)[8], double& average, u32& 
             ++failures;
             return;
         }
+        outlines(frame);
         const long long gap = closest(state);
         nearest = gap < nearest ? gap : nearest;
         for (u32 i = 0; i < 64; ++i) {
@@ -159,6 +174,9 @@ int main() {
     // Nor zigzags: the water adds 30 degrees or less of turn at any point (a sawtooth adds 60 or more).
     std::printf("most turn the water adds along the border: %.0f degrees\n", sharpest);
     check("the border never zigzags", sharpest <= 30);
+    std::printf("outline points at least %.3f px apart, closing edges at least %.3f px\n", tightest_gap, shortest_close);
+    check("outline points stay 1/8 px apart", tightest_gap >= 0.125);
+    check("closing edges stay 1/4 px or longer", shortest_close >= 0.25);
     check("reduced motion: still at rest", rest == 0);
     return failures ? 1 : 0;
 }
