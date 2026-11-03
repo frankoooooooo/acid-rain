@@ -9,9 +9,15 @@ are still to do.
 | | Acid Rain | ACIDXY |
 | --- | --- | --- |
 | `sdk.py test` estimate, heaviest setting | 31,900–36,700 on a Mac (varies run to run); 22,000 on GitHub CI | 30,500 on the same Mac |
-| Hardware readout (`opxy-synth-c8-sweep-v1`) | not measured yet | 6.08% default, 7.72% heaviest (Wav Dist) |
+| Hardware readout (`opxy-synth-c8-sweep-v1`), one run of three | 3.17% stock midpoint, 2.68% clean (pH 7), 3.185% heaviest (pH 12.5%) | 6.08% default, 7.72% heaviest (Wav Dist) |
 
-The estimate does **not** put Acid Rain under ACIDXY. It is skewed by the
+On the device Acid Rain costs about half of ACIDXY. Cutoff, reso, env mod,
+decay, accent, slide and dew don't change its cost (2.68% to 2.70%): every
+coefficient is worked out per block. Only pH below 7, which switches on the
+corrosion shaper, adds about 0.5 points (3.17% to 3.19%). This comes from one
+sweep run (firmware `343e0403…`, Acid Rain `a355b2b`); the catalog needs three.
+
+The host estimate does **not** put Acid Rain under ACIDXY, and it was far off. It is skewed by the
 multiply: Acid Rain uses the SDK's `q31::multiply`, one instruction on the
 Blackfin, which the host runs as a 64-bit sequence. Timed with a host-cheap
 multiply instead, the same render costs about 10,000–12,500. ACIDXY uses its
@@ -124,7 +130,7 @@ Checked with [operator-design](https://github.com/thoughtgrain/operator-design).
 
 ## Open risks and device checks
 
-- **Hardware CPU**: not measured. Below 3.5% isn't proven until a profiling run.
+- **Hardware CPU**: one run of three measured (3.185% heaviest, under the recommended 3.5%); runs 2 and 3 still to do for the catalog record.
 - **Late locks**: accent and slide are latched on a note's first block and
   accepted on its second. Check on the device that an accent lock on every
   other step sounds accented from its first block.
