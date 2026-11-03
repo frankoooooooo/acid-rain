@@ -221,11 +221,11 @@ static inline void guard(const i32 (*rest)[2], i32 (*d)[2], u32 count, bool clos
 // on along their line. Path px, Q10.
 static inline void space(Frame::path_type& path) {
     const i32 gap = 164, closing = 267;
-    for (u32 pass = 0; pass < 2; ++pass)
+    for (u32 pass = 0; pass < 4; ++pass)  // mending the closing edge can crowd the point before it
         for (u32 i = 0; i < Frame::point_count; ++i) {
             const bool last = i + 1 == Frame::point_count;
-            Point& a = path.points[last ? 0 : i];
-            Point& b = path.points[last ? i : i + 1];  // the closing edge moves its last point
+            Point& a = path.points[i];
+            Point& b = path.points[last ? 0 : i + 1];  // the closing edge moves the first point on
             const i32 want = last ? closing : gap;
             i32 dx = b.x - a.x, dy = b.y - a.y;
             const i32 length = static_cast<i32>(root(static_cast<u32>(dx * dx + dy * dy)));
@@ -253,12 +253,15 @@ static inline bool commit(i32 (*placed)[2], const i32 (*points)[2], u32 count, b
 }
 
 static inline Drop& add_drop(DisplayState& state, i32 u, i32 v, i32 strength, i32 tight) {
-    // Take a free slot, or the oldest.
+    // Take a free slot, else the oldest weak drop (a satellite or a landing
+    // droplet), else the oldest: played notes' rings live to reach the face's edge.
     u32 slot = drop_count;
     i32 oldest = -1;
     for (u32 d = 0; d < drop_count; ++d) {
-        if (!state.drops[d].strength) { slot = d; break; }
-        if (state.drops[d].age > oldest) { oldest = state.drops[d].age; slot = d; }
+        const Drop& drop = state.drops[d];
+        if (!drop.strength) { slot = d; break; }
+        const i32 claim = drop.age + (drop.strength < 512 ? 1 << 20 : 0);
+        if (claim > oldest) { oldest = claim; slot = d; }
     }
     Drop& drop = state.drops[slot];
     drop.u = drop.from_u = u;
@@ -353,7 +356,7 @@ inline void display(DisplayState& state, const Input& input, Frame& frame) {
             if (slid && n + state.head) {  // a slide drags the drop from the last one
                 drop.from_u = state.last_u;
                 drop.from_v = state.last_v;
-                drop.glide = 154;
+                drop.glide = 307;  // dragged over 0.3 s
             }
         }
         if (!still) {
@@ -371,10 +374,12 @@ inline void display(DisplayState& state, const Input& input, Frame& frame) {
         state.last_v = v;
         state.trickle = 0;
         if (accented) state.since_accent = 0;
-        if (rained) {  // a splash marks the rain; the eyes mark every accent
+        if (rained || a == 1) {  // a splash marks the rain and locked accents
             // A cluster of rain splashes once: a new splash waits until the last is 0.4 s old.
             const Splash& previous = state.splashes[(state.next_splash + splash_count - 1) % splash_count];
-            if (!still && (previous.age < 0 || previous.age >= 410)) {
+            // A locked accent on every note splashes at most every 0.8 s.
+            const i32 wait = rained ? 410 : 819;
+            if (!still && (previous.age < 0 || previous.age >= wait)) {
                 Splash& splash = state.splashes[state.next_splash++ % splash_count];
                 splash.u = u;
                 splash.v = v;
@@ -455,9 +460,9 @@ inline void display(DisplayState& state, const Input& input, Frame& frame) {
         saved[d] = state.drops[d];
         Drop& drop = state.drops[d];
         if (drop.strength && drop.glide > 0) {
-            const i32 left = (drop.glide * drop.glide) / 154;  // Q10 s, eases out
-            drop.u += ((drop.from_u - drop.u) * left) / 154;
-            drop.v += ((drop.from_v - drop.v) * left) / 154;
+            const i32 left = (drop.glide * drop.glide) / 307;  // Q10 s, eases out
+            drop.u += ((drop.from_u - drop.u) * left) / 307;
+            drop.v += ((drop.from_v - drop.v) * left) / 307;
         }
     }
 
@@ -467,7 +472,7 @@ inline void display(DisplayState& state, const Input& input, Frame& frame) {
     const i32 px = snap(s::centre_x), py = snap(s::centre_y);
 
     // The border: refracted like the floor under it, and pitted where the water
-    // moves it as the pH falls (up to 1.5 px). At rest it is smooth. Its shift is
+    // moves it as the pH falls (up to 3 px). At rest it is smooth. Its shift is
     // smoothed once over neighbours and guarded so its points never bunch.
     i32 points[64][2], shifts[64][2], rest[64][2];
     for (u32 i = 0; i < 64; ++i) {
@@ -478,9 +483,9 @@ inline void display(DisplayState& state, const Input& input, Frame& frame) {
     for (u32 pass = 0; pass < 4; ++pass) smooth(shifts, 64, true);  // the border four times: its ends curve tightest
     for (u32 i = 0; i < 64; ++i) {
         const i32 moving = clamp(magnitude(shifts[i][0]) + magnitude(shifts[i][1]), 0, 32) * 32;  // Q10: 1 once it moves about 4 px
-        const i32 pit = (((s::pits[i] * acid) >> 10) * moving) >> 10;  // Q10, -1..1
-        shifts[i][0] += ((s::border_u[i] * pit) >> 10) * 3 / 198;  // up to 1.5 px
-        shifts[i][1] += ((s::border_v[i] * pit) >> 10) * 3 / 198;
+        const i32 pit = (((magnitude(s::pits[i]) * acid) >> 10) * moving) >> 10;  // Q10, 0..1: lumps bulge outward, never into the face
+        shifts[i][0] += ((s::border_u[i] * pit) >> 10) * 3 / 99;  // up to 3 px
+        shifts[i][1] += ((s::border_v[i] * pit) >> 10) * 3 / 99;
     }
     guard(rest, shifts, 64, true);
     for (u32 i = 0; i < 64; ++i)
@@ -502,8 +507,14 @@ inline void display(DisplayState& state, const Input& input, Frame& frame) {
     }
     smooth(shifts, 32, false);
     guard(rest, shifts, 32, false);
-    for (u32 i = 0; i < 32; ++i)
+    for (u32 i = 0; i < 32; ++i) {
         screen_point(s::smile_u[i], s::smile_v[i], shifts[i][0], shifts[i][1], points[i][0], points[i][1]);
+        // The smile corrodes too, up to 2 px across itself, where the water moves it.
+        const i32 moving = clamp(magnitude(shifts[i][0]) + magnitude(shifts[i][1]), 0, 32) * 32;
+        const i32 pit = (((s::wave[(i * 24 + 40) & 255] * acid) >> 10) * moving) >> 10;  // Q10, three lumps
+        points[i][0] += (s::smile_dx[i] * pit * 13) >> 10;  // the ribbon's 0.15 px normal, x 13: 2 px
+        points[i][1] += (s::smile_dy[i] * pit * 13) >> 10;
+    }
     if (commit(state.smile, points, 32, fresh)) {
         state.keys[1] = state.keys[1] % 0xfffffff0u + 1;
         frame.paths[1].key = state.keys[1];

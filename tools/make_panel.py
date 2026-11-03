@@ -144,7 +144,7 @@ for i in range(30):
     arc.append((0.38 * math.cos(th), -0.05 + 0.38 * math.sin(th)))
 tick = lambda end, sign: (end[0] + sign * 0.03, end[1] - 0.12)  # up and a little outward, floor units
 smile = [tick(arc[0], 1)] + arc + [tick(arc[-1], -1)]
-eyes = [(-0.2, -0.22), (0.2, -0.22)]
+eyes = [(-0.17, -0.18), (0.17, -0.18)]  # clear of the border at any turn, with 5 px of water on each
 
 
 def turn(u, v):
@@ -178,7 +178,7 @@ eye_oval = [(0.04 * math.sin(2 * math.pi * i / 64), -0.12 * math.cos(2 * math.pi
 # On an accent it morphs into a bolt: a thin outline around a zigzag line, so
 # the bold stroke draws a crisp lightning stroke (screen px about the eye's
 # centre; every turn well away from straight back).
-zigzag = [(4.5, -10), (-2.5, -1.5), (3.0, 1.5), (-4.5, 10)]
+zigzag = [(5.4, -12), (-3.0, -1.8), (3.6, 1.8), (-5.4, 12)]  # 1.2x the eye, so an accent reads at a glance
 eye_bolt = [(x / S, y / (S * K)) for x, y in resample(ribbon(zigzag, 0.4), 64)]
 # Each eye's outlines about its centre, turned with the face; the right eye mirrors the left.
 fine_oval = [(0.04 * math.sin(2 * math.pi * i / 512), -0.12 * math.cos(2 * math.pi * i / 512)) for i in range(512)]
@@ -199,9 +199,9 @@ def outline(shape, eye):
 ovals = [outline(fine_oval, e) for e in range(2)]
 bolts = [outline(eye_bolt, e) for e in range(2)]
 # Pseudo-random pits for the pH corrosion, -1..1: alternating, so the line goes jagged.
-# Corrosion lumps for the pH, -1..1 along the border: two slow waves (12 and 7
+# Corrosion lumps for the pH, -1..1 along the border: two slow waves (7 and 4
 # a turn), so the line goes lumpy, never a point-to-point sawtooth.
-pits = [0.55 * math.sin(2 * math.pi * 12 * i / 64 + 1.0) + 0.45 * math.sin(2 * math.pi * 7 * i / 64 + 2.0) for i in range(64)]
+pits = [0.6 * math.sin(2 * math.pi * 7 * i / 64 + 1.0) + 0.4 * math.sin(2 * math.pi * 4 * i / 64 + 2.0) for i in range(64)]
 
 
 # Half-size pixel offsets (the face's nodes sit at scale 2 on its centre).
@@ -259,7 +259,7 @@ for i, (u, v) in enumerate(eyes):
     points = [half(u + du, v + dv) for du, dv in ovals[i]]
     out.append(f'<path id="acidrain_node_{2 + i}" transform="matrix(1 0 0 1 {fmt(cx)} {fmt(cy)})" d="{path_d(points)}" fill="none" stroke="#B4B4B4" stroke-width="{fmt(EYES / 2)}"{join}/>')
 square = path_d([(-2, -2), (2, -2), (2, 2), (-2, 2)])
-bar = path_d([(-20, -1.5), (0, -1.5), (0, 1.5), (-20, 1.5)])
+bar = path_d([(-20, -2.5), (0, -2.5), (0, 2.5), (-20, 2.5)])  # 5 px: a slide reads at a glance
 dash = path_d([(-4, -1), (4, -1), (4, 1), (-4, 1)])
 for i in range(SPLASH_NODES):
     out.append(f'<path id="acidrain_node_{SPLASH + i}" transform="matrix(1 0 0 1 640 320)" d="{square}" fill="#C8C8C8" stroke="#C8C8C8" stroke-width="0.5"/>')
