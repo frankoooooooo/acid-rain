@@ -278,8 +278,11 @@ inline void render(Voice& voice, Shared& shared, u32 owner, opxy::Output output,
             m += multiply(multiply(sine, sub_level), gain_now);
         }
         if (corrosion) {
-            const i32 folded = shape(t::fold, m + multiply(m, acid << 16), 10) >> 8;
-            m += multiply(folded - m, corrosion);
+            // The fold's nearest entry: the table already steps for grit, so
+            // interpolating between entries buys nothing but cycles.
+            i32 at = ((m + multiply(m, acid << 16)) >> 10) + 128;
+            at = at < 0 ? 0 : at > 256 ? 256 : at;
+            m += multiply((t::fold[at] >> 8) - m, corrosion);
         }
         // Open303's level (-12 dB) through u - u^3 / 3, u = m / (1.5 2^17), Q15:
         // flat to the ear at normal levels, warm under accent, never past half scale.
