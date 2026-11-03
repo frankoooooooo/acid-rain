@@ -156,7 +156,12 @@ static inline void shift(const DisplayState& state, const Water& w, const i32 (&
         const i32 dx = u - drop.u, dy = v - drop.v;
         if (magnitude(dx) > 3072 || magnitude(dy) > 3072) continue;
         const i32 front = drop.age * w.front_speed >> 10;
+        if (front < 0) continue;
+        // Only points in the ring band need the square root: r = floor(sqrt) with
+        // front - train < r <= front, i.e. (inner + 1)^2 <= square < (front + 1)^2.
         const u32 square = static_cast<u32>(dx * dx + dy * dy);
+        const u32 outer = static_cast<u32>(front) + 1, inner = static_cast<u32>(front - train[d] + 1);
+        if (square >= outer * outer || (front - train[d] + 1 > 0 && square < inner * inner)) continue;
         const i32 r = static_cast<i32>(root(square));
         const i32 behind = front - r;
         if (behind < 0 || behind >= train[d] || r < 16) continue;
@@ -333,7 +338,7 @@ inline void display(DisplayState& state, const Input& input, Frame& frame) {
     u32 started = fresh ? 0 : input.note_on_serial - state.serial;
     state.serial = input.note_on_serial;
     if (started > 4) started = 4;
-    state.since_note += dt;
+    state.since_note = clamp(state.since_note + dt, 0, 12 * second);  // the rain model caps gaps at 12 s; no overflow on a long idle
     for (u32 n = 0; n < started; ++n) {
         const u32 serial = input.note_on_serial - (started - 1 - n);
         const u32 blocks = static_cast<u32>(state.since_note) * 689u >> 10;  // 44100 / 64 blocks a second
