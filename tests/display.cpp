@@ -58,6 +58,8 @@ static double rest_spacing[64];
 static double sharpest = 0;             // the most turn the water adds at any border point, degrees
 static double rest_turn[64];
 static double tightest_gap = 1e9, shortest_close = 1e9;  // over every outline and frame, path px
+static double straightest_back = 180;                    // the sharpest turn back, degrees from reversing
+static u32 back_path, back_point;
 
 // The device merges outline points closer than 1/8 px and draws a sliver from a
 // closing edge under 1/4 px (open-xy docs/display.md).
@@ -69,6 +71,13 @@ static void outlines(const Screen& frame) {
             const double dx = (b.x - a.x) / 1024.0, dy = (b.y - a.y) / 1024.0, gap = __builtin_sqrt(dx * dx + dy * dy);
             tightest_gap = gap < tightest_gap ? gap : tightest_gap;
             if (i + 1 == Screen::point_count) shortest_close = gap < shortest_close ? gap : shortest_close;
+            // And no turn within 2.5 degrees of straight back.
+            const opxy::draw::Point& c = frame.paths[p].points[(i + 2) % Screen::point_count];
+            const double ex = (c.x - b.x) / 1024.0, ey = (c.y - b.y) / 1024.0, next = __builtin_sqrt(ex * ex + ey * ey);
+            if (gap > 0 && next > 0) {
+                const double back = __builtin_acos(-(dx * ex + dy * ey) / (gap * next)) * 57.29578;  // 0 = straight back
+                if (back < straightest_back) { straightest_back = back; back_path = p; back_point = i; }
+            }
         }
 }
 
@@ -177,6 +186,8 @@ int main() {
     std::printf("outline points at least %.3f px apart, closing edges at least %.3f px\n", tightest_gap, shortest_close);
     check("outline points stay 1/8 px apart", tightest_gap >= 0.125);
     check("closing edges stay 1/4 px or longer", shortest_close >= 0.25);
+    std::printf("no outline turns back closer than %.1f degrees (outline %u, point %u)\n", straightest_back, back_path, back_point);
+    check("no outline turns back within 2.5 degrees", straightest_back >= 2.6);
     check("reduced motion: still at rest", rest == 0);
     return failures ? 1 : 0;
 }

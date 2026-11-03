@@ -195,14 +195,16 @@ static inline void smooth(i32 (*d)[2], u32 count, bool closed) {
         }
 }
 
-// A floor offset's length squared on screen, in quarter pixels.
-static inline i32 span(i32 du, i32 dv) {
-    const i32 x = (du * s::scale) >> 8, y = (((dv * s::scale) >> 8) * s::slant) >> 10;
-    return x * x + y * y;
+// Two floor offsets' dot product on screen, in quarter pixels squared.
+static inline i32 along(i32 au, i32 av, i32 bu, i32 bv) {
+    const i32 ax = (au * s::scale) >> 8, ay = (((av * s::scale) >> 8) * s::slant) >> 10;
+    const i32 bx = (bu * s::scale) >> 8, by = (((bv * s::scale) >> 8) * s::slant) >> 10;
+    return ax * bx + ay * by;
 }
-// Keeps an outline's neighbouring points at 60% or more of their resting gap:
-// where the water would squeeze two closer, both take their mean shift, which
-// puts them back at their resting gap. (Floor Q10 units.)
+// Keeps each step along an outline at 60% or more of its resting length,
+// measured along its resting direction: the water can neither squeeze two
+// neighbours together nor fold the line back over itself. Where it would, both
+// take their mean shift, which puts them back as at rest. (Floor Q10 units.)
 static inline void guard(const i32 (*rest)[2], i32 (*d)[2], u32 count, bool closed) {
     for (u32 pass = 0; pass < 3; ++pass)  // mending one pair can squeeze the next
     for (u32 i = 0; i < count; ++i) {
@@ -210,7 +212,7 @@ static inline void guard(const i32 (*rest)[2], i32 (*d)[2], u32 count, bool clos
         if (!j && !closed) break;
         const i32 ru = rest[j][0] - rest[i][0], rv = rest[j][1] - rest[i][1];
         const i32 nu = ru + d[j][0] - d[i][0], nv = rv + d[j][1] - d[i][1];
-        if (100 * span(nu, nv) >= 36 * span(ru, rv)) continue;
+        if (10 * along(nu, nv, ru, rv) >= 6 * along(ru, rv, ru, rv)) continue;
         for (u32 c = 0; c < 2; ++c) d[i][c] = d[j][c] = (d[i][c] + d[j][c]) >> 1;
     }
 }
@@ -480,7 +482,7 @@ inline void display(DisplayState& state, const Input& input, Frame& frame) {
         rest[i][1] = s::border_v[i];
         face_shift(state, w, peak, face_train, face_inverse, face_turns, rest[i][0], rest[i][1], shifts[i][0], shifts[i][1]);
     }
-    for (u32 pass = 0; pass < 4; ++pass) smooth(shifts, 64, true);  // the border four times: its ends curve tightest
+    for (u32 pass = 0; pass < 5; ++pass) smooth(shifts, 64, true);  // the border five times: its ends curve tightest
     for (u32 i = 0; i < 64; ++i) {
         const i32 moving = clamp(magnitude(shifts[i][0]) + magnitude(shifts[i][1]), 0, 32) * 32;  // Q10: 1 once it moves about 4 px
         const i32 pit = (((magnitude(s::pits[i]) * acid) >> 10) * moving) >> 10;  // Q10, 0..1: lumps bulge outward, never into the face
@@ -506,12 +508,14 @@ inline void display(DisplayState& state, const Input& input, Frame& frame) {
         face_shift(state, w, peak, face_train, face_inverse, face_turns, rest[i][0], rest[i][1], shifts[i][0], shifts[i][1]);
     }
     smooth(shifts, 32, false);
+    smooth(shifts, 32, false);  // twice: its corners turn sharply
     guard(rest, shifts, 32, false);
     for (u32 i = 0; i < 32; ++i) {
         screen_point(s::smile_u[i], s::smile_v[i], shifts[i][0], shifts[i][1], points[i][0], points[i][1]);
         // The smile corrodes too, up to 2 px across itself, where the water moves it.
         const i32 moving = clamp(magnitude(shifts[i][0]) + magnitude(shifts[i][1]), 0, 32) * 32;
-        const i32 pit = (((s::wave[(i * 24 + 40) & 255] * acid) >> 10) * moving) >> 10;  // Q10, three lumps
+        const i32 taper = s::wave[(i * 128 / 31) & 255];  // none at the corners, where the line turns sharply
+        const i32 pit = (((((s::wave[(i * 24 + 40) & 255] * acid) >> 10) * moving) >> 10) * taper) >> 10;  // Q10, three lumps
         points[i][0] += (s::smile_dx[i] * pit * 13) >> 10;  // the ribbon's 0.15 px normal, x 13: 2 px
         points[i][1] += (s::smile_dy[i] * pit * 13) >> 10;
     }
@@ -535,17 +539,16 @@ inline void display(DisplayState& state, const Input& input, Frame& frame) {
     if (still || fresh) state.bolt = target;
     else state.bolt += ((target - state.bolt) * (dt > 154 ? 1024 : dt * 1024 / 51 > 1024 ? 1024 : dt * 1024 / 51)) >> 10;
     if (magnitude(target - state.bolt) < 16) state.bolt = target;
+    // Each eye rides the water as a whole, shifted as the water shifts its
+    // centre: an eye is small enough that bending it point by point folds it.
     for (u32 e = 0; e < 2; ++e) {
+        face_shift(state, w, peak, face_train, face_inverse, face_turns, s::eye_u[e], s::eye_v[e], du, dv);
         for (u32 i = 0; i < 64; ++i) {
             const u32 k = e * 64 + i;
-            rest[i][0] = s::eye_u[e] + s::oval_u[k] + (((s::bolt_u[k] - s::oval_u[k]) * state.bolt) >> 10);
-            rest[i][1] = s::eye_v[e] + s::oval_v[k] + (((s::bolt_v[k] - s::oval_v[k]) * state.bolt) >> 10);
-            face_shift(state, w, peak, face_train, face_inverse, face_turns, rest[i][0], rest[i][1], shifts[i][0], shifts[i][1]);
+            const i32 u = s::eye_u[e] + s::oval_u[k] + (((s::bolt_u[k] - s::oval_u[k]) * state.bolt) >> 10);
+            const i32 v = s::eye_v[e] + s::oval_v[k] + (((s::bolt_v[k] - s::oval_v[k]) * state.bolt) >> 10);
+            screen_point(u, v, du, dv, points[i][0], points[i][1]);
         }
-        smooth(shifts, 64, true);
-        guard(rest, shifts, 64, true);
-        for (u32 i = 0; i < 64; ++i)
-            screen_point(rest[i][0], rest[i][1], shifts[i][0], shifts[i][1], points[i][0], points[i][1]);
         if (commit(state.eyes[e], points, 64, fresh)) {
             state.keys[2 + e] = state.keys[2 + e] % 0xfffffff0u + 1;
             frame.paths[2 + e].key = state.keys[2 + e];

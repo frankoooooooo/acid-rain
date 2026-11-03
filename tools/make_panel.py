@@ -179,9 +179,24 @@ eye_oval = [(0.04 * math.sin(2 * math.pi * i / 64), -0.12 * math.cos(2 * math.pi
 # the bold stroke draws a crisp lightning stroke (screen px about the eye's
 # centre; every turn well away from straight back).
 zigzag = [(5.4, -12), (-3.0, -1.8), (3.6, 1.8), (-5.4, 12)]  # 1.2x the eye, so an accent reads at a glance
-eye_bolt = [(x / S, y / (S * K)) for x, y in resample(ribbon(zigzag, 0.4), 64)]
+eye_bolt = [(x / S, y / (S * K)) for x, y in ribbon(zigzag, 0.4)]  # its 8 corners; outline() fills in the rest
 # Each eye's outlines about its centre, turned with the face; the right eye mirrors the left.
 fine_oval = [(0.04 * math.sin(2 * math.pi * i / 512), -0.12 * math.cos(2 * math.pi * i / 512)) for i in range(512)]
+
+
+def spread(polygon, count):
+    """`count` points along a closed polygon keeping every corner, the rest shared
+    out by edge length: a thin ribbon's end caps keep both their right angles."""
+    edges = [(polygon[i], polygon[(i + 1) % len(polygon)]) for i in range(len(polygon))]
+    lengths = [math.dist(a, b) for a, b in edges]
+    spare = count - len(polygon)
+    extra = [int(spare * l / sum(lengths)) for l in lengths]
+    for i in sorted(range(len(edges)), key=lambda i: -lengths[i])[:spare - sum(extra)]:
+        extra[i] += 1
+    points = []
+    for (a, b), n in zip(edges, extra):
+        points += [(a[0] + (b[0] - a[0]) * k / (n + 1), a[1] + (b[1] - a[1]) * k / (n + 1)) for k in range(n + 1)]
+    return points
 
 
 def outline(shape, eye):
@@ -193,7 +208,8 @@ def outline(shape, eye):
     drawn = [(S * u, S * K * v) for u, v in turned]
     top = min(range(len(drawn)), key=lambda k: drawn[k][1])
     drawn = drawn[top:] + drawn[:top]
-    return [(x / S, y / (S * K)) for x, y in resample(drawn, 64)]
+    even = spread(drawn, 64) if len(drawn) < 64 else resample(drawn, 64)
+    return [(x / S, y / (S * K)) for x, y in even]
 
 
 ovals = [outline(fine_oval, e) for e in range(2)]
