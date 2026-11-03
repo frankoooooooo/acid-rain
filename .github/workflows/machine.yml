@@ -7,7 +7,7 @@ permissions:
   contents: read
 env:
   # Pinned to the SDK staging commit this machine was tested against.
-  OPEN_XY_REF: 16de93ab640539115c282a0592ca0de498948225
+  OPEN_XY_REF: 5112f144713005d809748c807dc7381ac2789b04
 jobs:
   machine:
     runs-on: ubuntu-latest
