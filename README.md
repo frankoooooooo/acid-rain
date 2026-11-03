@@ -72,7 +72,9 @@ presets do, and use mono play mode.
 
 `squelch`, `drizzle`, `downpour`, `corroded`, `glider` and `monsoon`, from
 clean to acid and from dry to monsoon. They live in `presets/` (written from
-`definition.json` by `tools/make_presets.py`).
+`definition.json` by `tools/make_presets.py`). They and the generated init
+preset (`presetDefaults` in `machine.json`) use a short amp release (1024), so
+notes stay plucky.
 
 ## Develop
 

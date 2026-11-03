@@ -44,7 +44,7 @@
     "amp": {
       "attack": 0,
       "decay": 32767,
-      "release": 2048,
+      "release": 1024,
       "sustain": 32767
     },
     "filter": {

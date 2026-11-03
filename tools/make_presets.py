@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Writes presets/<name>.json, the OP-XY's version-4 presets, from the presets in
 definition.json, so the device and the browser preview share them. Mono, the
-track's stock filter fully open, a short amp release. Run after changing them:
+track's stock filter fully open, a short, plucky amp release. Run after changing them:
 
     python3 tools/make_presets.py
 """
@@ -32,7 +32,7 @@ for name, values in definition["presets"].items():
                    "params": params, "playmode": "mono",
                    "portamento.amount": 0, "portamento.type": 0, "transpose": 0,
                    "tuning.root": 0, "tuning.scale": 0, "velocity.sensitivity": 0, "volume": 16384, "width": 0},
-        "envelope": {"amp": {"attack": 0, "decay": 32767, "release": 2048, "sustain": 32767},
+        "envelope": {"amp": {"attack": 0, "decay": 32767, "release": 1024, "sustain": 32767},
                      "filter": {"attack": 0, "decay": 0, "release": 0, "sustain": 32767}},
         "fx": {"active": False, "params": [0, 0, 0, 0, 0, 32767, 0, 0], "type": "svf"},
         "lfo": {"active": False, "params": [0] * 8, "type": "value"},

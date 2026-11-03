@@ -137,7 +137,7 @@ Checked with [operator-design](https://github.com/thoughtgrain/operator-design).
 
 ## Open risks and device checks
 
-- **Hardware CPU**: v1.0.0 (`7f9c8dc`) measured 3.168% heaviest over three runs, under the recommended 3.5%. The intermediate `53baa77` measured 3.519%; reading the corrosion fold's nearest entry instead of interpolating brought it back down. Any later change to machine source needs a new measurement.
+- **Hardware CPU**: v1.0.0 (`7f9c8dc`) measured 3.168% heaviest over three runs, under the recommended 3.5%. The intermediate `53baa77` measured 3.519%; reading the corrosion fold's nearest entry instead of interpolating brought it back down. v1.0.1 changes only the presets (a shorter amp release) and the description, so it asks to carry the v1.0.0 record (`cpu-carried`); any change to audio or screen code needs a new measurement.
 - **Late locks**: accent and slide are latched on a note's first block and
   accepted on its second. Check on the device that an accent lock on every
   other step sounds accented from its first block.

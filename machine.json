@@ -2,6 +2,11 @@
   "schema": 1,
   "sdk": "1.7",
   "kind": "synth",
-  "description": "TB-303 voice from Open303 in fixed point, with accent and slide lanes the rain decides, pH corrosion and a refracted-water smiley screen.",
-  "presets": "presets"
+  "description": "Highly optimized Open303 port: auto accent, gate, slide and octave jump, off or p-locked. pH and dew drive the sound and the rain lane. Melt your face off :)",
+  "presets": "presets",
+  "presetDefaults": {
+    "amp": {
+      "release": 1024
+    }
+  }
 }
