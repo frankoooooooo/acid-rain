@@ -118,6 +118,10 @@ subtly since the ripples were made smaller (reso least) (contact sheet in
 `acid-rain-work/frames/contact.png`, not committed). Dew is the subtlest: it
 shows only as how often splashes and bolt eyes come.
 
+
+### operator-design checks
+Checked with [operator-design](https://github.com/thoughtgrain/operator-design). Every control clears its perceptibility floor (changed screen area at 0, 50 and 100), with accent and slide measured off→on, since off→auto changes neither picture nor sound at the defaults. `tests/display.cpp` now holds the device drawing rules on every frame: outline points 1/8 px apart, closing edges 1/4 px or longer, no turn within 2.5 degrees of straight back, the face's lines apart.
+
 ## Open risks and device checks
 
 - **Hardware CPU**: not measured. Below 3.5% isn't proven until a profiling run.
