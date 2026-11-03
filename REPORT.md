@@ -9,13 +9,19 @@ are still to do.
 | | Acid Rain | ACIDXY |
 | --- | --- | --- |
 | `sdk.py test` estimate, heaviest setting | 31,900–36,700 on a Mac (varies run to run); 22,000 on GitHub CI | 30,500 on the same Mac |
-| Hardware readout (`opxy-synth-c8-sweep-v1`), one run of three | 3.17% stock midpoint, 2.68% clean (pH 7), 3.185% heaviest (pH 12.5%) | 6.08% default, 7.72% heaviest (Wav Dist) |
+| Hardware readout (`opxy-synth-c8-sweep-v1`), median of 3 runs | 3.172% stock midpoint, 2.69% clean (pH 7), 3.185% heaviest (pH 12.5%), 3.183% every control at its heaviest | 6.08% default, 7.72% heaviest (Wav Dist) |
 
 On the device Acid Rain costs about half of ACIDXY. Cutoff, reso, env mod,
 decay, accent, slide and dew don't change its cost (2.68% to 2.70%): every
 coefficient is worked out per block. Only pH below 7, which switches on the
-corrosion shaper, adds about 0.5 points (3.17% to 3.19%). This comes from one
-sweep run (firmware `343e0403…`, Acid Rain `a355b2b`); the catalog needs three.
+corrosion shaper, adds about 0.5 points (3.17% to 3.19%). The catalog record
+(three sweep runs, firmware `343e0403…`) is bound to Acid Rain `a355b2b`:
+
+```json
+{"benchmark": "opxy-synth-c8-sweep-v1", "commit": "a355b2b47fbb2e5bf70cac3fbe783b06d41451c5", "runs": 3,
+ "block_percent": 3.184558, "midpoint_percent": 3.172351, "combined_percent": 3.183032,
+ "worst_setting": {"control": 6, "label": "ph", "value": 268435455}}
+```
 
 The host estimate does **not** put Acid Rain under ACIDXY, and it was far off. It is skewed by the
 multiply: Acid Rain uses the SDK's `q31::multiply`, one instruction on the
@@ -130,7 +136,7 @@ Checked with [operator-design](https://github.com/thoughtgrain/operator-design).
 
 ## Open risks and device checks
 
-- **Hardware CPU**: one run of three measured (3.185% heaviest, under the recommended 3.5%); runs 2 and 3 still to do for the catalog record.
+- **Hardware CPU**: measured, 3.185% heaviest over three runs (under the recommended 3.5%), for `a355b2b`. A later change to machine source needs a new measurement.
 - **Late locks**: accent and slide are latched on a note's first block and
   accepted on its second. Check on the device that an accent lock on every
   other step sounds accented from its first block.
