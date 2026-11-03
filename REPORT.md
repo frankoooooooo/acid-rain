@@ -9,7 +9,7 @@ are still to do.
 | | Acid Rain | ACIDXY |
 | --- | --- | --- |
 | `sdk.py test` estimate, heaviest setting | 31,900–36,700 on a Mac (varies run to run); 22,000 on GitHub CI | 30,500 on the same Mac |
-| Hardware readout (`opxy-synth-c8-sweep-v1`), median of 3 runs | 3.172% stock midpoint, 2.69% clean (pH 7), 3.185% heaviest (pH 12.5%), 3.183% every control at its heaviest | 6.08% default, 7.72% heaviest (Wav Dist) |
+| Hardware readout (`opxy-synth-c8-sweep-v1`), v1.0.0 (`7f9c8dc`), 3 runs | 3.107% stock midpoint, about 2.8% clean (pH 7), 3.168% heaviest (pH 12.5%), 3.055% every control at its heaviest | 6.08% default, 7.72% heaviest (Wav Dist) |
 
 On the device Acid Rain costs about half of ACIDXY. Cutoff, reso, env mod,
 decay, accent, slide and dew don't change its cost (2.68% to 2.70%): every
@@ -137,7 +137,7 @@ Checked with [operator-design](https://github.com/thoughtgrain/operator-design).
 
 ## Open risks and device checks
 
-- **Hardware CPU**: measured, 3.185% heaviest over three runs (under the recommended 3.5%), for `a355b2b`. The revision after it adds resonance body compensation (two multiplies a sample) and the off-by-default sub, so it needs a new sweep before any catalog submission.
+- **Hardware CPU**: v1.0.0 (`7f9c8dc`) measured 3.168% heaviest over three runs, under the recommended 3.5%. The intermediate `53baa77` measured 3.519%; reading the corrosion fold's nearest entry instead of interpolating brought it back down. Any later change to machine source needs a new measurement.
 - **Late locks**: accent and slide are latched on a note's first block and
   accepted on its second. Check on the device that an accent lock on every
   other step sounds accented from its first block.
