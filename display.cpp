@@ -26,10 +26,9 @@ const i32 reach = 63 * unit;              // a path's points stay within 64 px o
 // more (9 under a bolt), never meet, and neighbouring joints never fold over.
 const i32 reach_u = 32, reach_v = 76;    // 5 px across and down, floor Q10 units
 const i32 grid_reach = 5 * unit;         // Q10 px
-const i32 fall = 103;                    // the raindrop falls for 0.1 s, about three frames
 const i32 face_tight = 24;               // the face's rings span 4 or more of its points: no zigzag
-const u32 frame_budget = 14;             // grid segments, splash and raindrop redrawn a frame, about
-const u8 lane_used = 1, lane_accented = 2, lane_slid = 4, lane_auto = 8;
+const u32 frame_budget = 14;             // grid segments and splash redrawn a frame, about
+const u8 lane_used = 1, lane_accented = 2, lane_slid = 4, lane_octave = 8, lane_short = 16;
 
 enum Shade : u32 { black = 0, grey = 1, line = 2, smile_line = 3, bright = 4, mid = 5, dim = 6, face = 7 };
 
@@ -277,7 +276,6 @@ static inline void restart(DisplayState& state, const Input& input) {
     for (u32 i = 0; i < splash_count; ++i) state.splashes[i].age = -1;
     for (u32 i = 0; i < 4; ++i) state.knobs[i] = input.slots[i];
     for (u32 i = 0; i < 4; ++i) state.keys[i] = 1;
-    state.drop_age = -1;
 }
 
 // --- The frame -----------------------------------------------------------------
@@ -313,9 +311,11 @@ inline void display(DisplayState& state, const Input& input, Frame& frame) {
         const u32 serial = input.note_on_serial - (started - 1 - n);
         const u32 blocks = static_cast<u32>(state.since_note) * 689u >> 10;  // 44100 / 64 blocks a second
         state.since_note = 0;
-        const bool rained = rain_note(state.rain, blocks, input.slots[6], input.slots[7]);
+        const RainNote rain = rain_note(state.rain, blocks, input.slots[6], input.slots[7]);
+        const bool rained = rain.accent;
         const u32 a = choice(input.slots[4]), sl = choice(input.slots[5]);
         const bool accented = a == 1 || (a == 2 && rained);
+        const bool slid = sl == 1 || (sl == 2 && rain.slide);
         // Where it lands: a hash of the note counter, inside the face.
         const u32 h = mix(serial * 0x9e3779b9u + 17);
         const i32 angle = static_cast<i32>(h & 255), radius = static_cast<i32>((h >> 8 & 1023) * 440 >> 10);
@@ -328,7 +328,7 @@ inline void display(DisplayState& state, const Input& input, Frame& frame) {
             drop.kscale = 819 + static_cast<i32>((j & 1023) * 410 >> 10);        // x0.8 .. 1.2
             drop.height = 717 + static_cast<i32>((j >> 10 & 1023) * 461 >> 10);  // x0.7 .. 1.15
             drop.phase = static_cast<i32>(j >> 20 & 255);
-            if (sl == 1 && n + state.head) {  // a slide drags the drop from the last one
+            if (slid && n + state.head) {  // a slide drags the drop from the last one
                 drop.from_u = state.last_u;
                 drop.from_v = state.last_v;
                 drop.glide = 154;
@@ -344,17 +344,12 @@ inline void display(DisplayState& state, const Input& input, Frame& frame) {
                 satellite.age = -(51 + static_cast<i32>((h2 >> 18 & 1023) * 72 >> 10));  // 0.05 .. 0.12 s late
                 satellite.phase = static_cast<i32>(h2 >> 24);
             }
-            // The raindrop: it falls onto this note's impact, glitching.
-            state.drop_age = 0;
-            state.drop_u = u;
-            state.drop_v = v;
-            state.drop_seed = mix(serial * 0x85ebca6bu + 7);
         }
         state.last_u = u;
         state.last_v = v;
         state.trickle = 0;
         if (accented) state.since_accent = 0;
-        if (rained) {  // a splash marks the rain; the raindrop marks every note, the eyes every accent
+        if (rained) {  // a splash marks the rain; the eyes mark every accent
             // A cluster of rain splashes once: a new splash waits until the last is 0.4 s old.
             const Splash& previous = state.splashes[(state.next_splash + splash_count - 1) % splash_count];
             if (!still && (previous.age < 0 || previous.age >= 410)) {
@@ -367,11 +362,12 @@ inline void display(DisplayState& state, const Input& input, Frame& frame) {
                 splash.landed = 0;
             }
         }
-        // The lane: accents are exact; auto slides depend on pitch, so they show as auto.
+        // The lane: what the engine plays, from the same rain model.
         u8 cell = lane_used;
         if (accented) cell |= lane_accented;
-        if (sl == 1) cell |= lane_slid;
-        if (sl == 2) cell |= lane_auto;
+        if (slid) cell |= lane_slid;
+        if (sl == 2 && rain.octave) cell |= lane_octave;
+        if (sl == 2 && rain.short_gate) cell |= lane_short;
         state.lane[state.head % 16] = cell;
         ++state.head;
     }
@@ -647,37 +643,6 @@ inline void display(DisplayState& state, const Input& input, Frame& frame) {
         }
     }
 
-    // The raindrop: a tilted, sliced teardrop falling along its tilt onto the
-    // impact for 0.1 s, easing in; each frame its bands tear sideways like a
-    // glitched poster, and now and then one drops out. Gone as it lands.
-    if (state.drop_age >= 0 && !fresh && !still) state.drop_age += dt;
-    if (fresh || still || state.drop_age < 0 || state.drop_age >= fall) {
-        if (fresh || state.drop_age >= 0)
-            for (u32 i = 0; i < 8; ++i) hide(frame, s::raindrop + i);
-        if (state.drop_age >= 0) state.splash_cost += 8;
-        state.drop_age = -1;
-    } else {
-        i32 x, y;
-        screen_point(state.drop_u, state.drop_v, 0, 0, x, y);
-        const i32 p = (state.drop_age << 10) / fall, eased = 1024 - (((1024 - p) * (1024 - p)) >> 10);  // Q10
-        const i32 left = 30 * (1024 - eased);  // Q10 px still to fall
-        x -= (left * 433) >> 10;               // along the tilt: sin 25, cos 25
-        y -= (left * 928) >> 10;
-        const u32 frame_index = static_cast<u32>(state.drop_age) / 34;
-        for (u32 i = 0; i < 8; ++i) {
-            const u32 h = mix(state.drop_seed + frame_index * 0x9e3779b9u + s::drop_band[i] * 0x7feb352du);
-            if ((h >> 12 & 15) == 0) {  // a band drops out for a frame
-                hide(frame, s::raindrop + i);
-                continue;
-            }
-            // Every frame tears at least one band (the frame's own pick), others by chance.
-            const bool torn = (h & 1) || s::drop_band[i] == (state.drop_seed + frame_index) % 5;
-            const i32 tear = torn ? (h & 4 ? 1 : -1) * (2 + static_cast<i32>(h >> 3 & 3)) : 0;  // +-2 .. 5 px
-            place(frame, s::raindrop + i, snap(x + tear * unit), snap(y), 1536, bright, stroke);  // 1.5x
-        }
-        state.splash_cost += 8;
-    }
-
     // The lane: a fixed ring of sixteen cells, written in turn, with a cursor
     // under the newest. Only the written cell and the cursor change.
     if (fresh || started) {
@@ -686,12 +651,14 @@ inline void display(DisplayState& state, const Input& input, Frame& frame) {
             const u32 i = fresh ? n : (state.head - started + n) % 16;
             const u8 cell = state.lane[i];
             const i32 x = lane_left + static_cast<i32>(i) * lane_step;
+            // A large cell for an accent, a dim one for a short gate; a bar slides
+            // in from the cell before; a square above jumps an octave.
             if (cell & lane_used) place(frame, s::lane + i, x, lane_y, cell & lane_accented ? 2 * unit : unit,
-                                        cell & lane_accented ? bright : mid, fill_and_stroke);
+                                        cell & lane_accented ? bright : cell & lane_short ? dim : mid, fill_and_stroke);
             else hide(frame, s::lane + i);
             if (cell & lane_slid) place(frame, s::lane + 16 + i, x - 2 * unit, lane_y, unit, bright, fill_and_stroke);
             else hide(frame, s::lane + 16 + i);
-            if (cell & lane_auto) place(frame, s::lane + 32 + i, x, lane_y - 10 * unit, unit, dim, fill_and_stroke);
+            if (cell & lane_octave) place(frame, s::lane + 32 + i, x, lane_y - 10 * unit, unit, bright, fill_and_stroke);
             else hide(frame, s::lane + 32 + i);
         }
         if (state.head) place(frame, s::lane + 48, lane_left + static_cast<i32>((state.head - 1) % 16) * lane_step,

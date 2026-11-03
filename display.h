@@ -4,7 +4,7 @@
 
 namespace acidrain {
 // Matches resources.display in definition.json: paths, points, nodes, texts, palette.
-using Frame = opxy::draw::Frame<4, 64, 201, 16, 8>;
+using Frame = opxy::draw::Frame<4, 64, 193, 16, 8>;
 
 // A drop on the water: its centre (floor Q10 units), where a slide drags it
 // from, its age (Q10 s, negative until it lands), strength (Q10), ring
@@ -30,10 +30,7 @@ struct DisplayState {
     Drop drops[12];
     Splash splashes[2];
     opxy::u32 next_drop, next_splash, head;
-    opxy::u32 splash_cost;     // splash and raindrop pixels moved last frame
-    opxy::i32 drop_age;        // Q10 s since the raindrop appeared, negative when none
-    opxy::i32 drop_u, drop_v;  // where it lands, floor Q10 units
-    opxy::u32 drop_seed;       // its glitch
+    opxy::u32 splash_cost;     // splash pixels moved last frame
     opxy::u8 lane[16];
     opxy::i32 joint_x[61], joint_y[61];         // as last placed, Q10 px
     opxy::i32 border[64][2], smile[32][2], eyes[2][64][2];  // the face's outlines as last placed, Q10 px

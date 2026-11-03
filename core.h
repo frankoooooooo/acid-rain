@@ -37,8 +37,6 @@ struct Shared {
     opxy::u32 cut;             // a note a slide has replaced: it closes, as on a monophonic 303
     opxy::u32 note_clock;      // the clock at the last note start
     opxy::i32 build;           // accent build-up over consecutive accents (Open303's accent RC), Q31
-    Rain rain;                 // humidity, which decides the rain accents
-    opxy::u32 history[2];      // the previous two notes' semitones, for the rain lane's hash
-    opxy::u32 notes;           // notes started: odd ones are off-beats to the rain lane
+    Rain rain;                 // humidity, which decides the rain accents and the auto lane
 };
 }

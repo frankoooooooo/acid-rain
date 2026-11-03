@@ -42,17 +42,6 @@ inline i32 shape(const i32 (&table)[257], i32 x, unsigned shift) {
     return table[index] + ((table[index + 1] - table[index]) >> 8) * fraction;
 }
 
-// The semitone an increment plays, counting from the lowest: its octave and
-// its place in it, so pitch bends and LFO wobble don't change the rain lane.
-inline u32 semitone(u32 increment) {
-    u32 top = 31;
-    while (top && !(increment >> top)) --top;
-    const u32 mantissa = (top >= 16 ? increment >> (top - 16) : increment << (16 - top)) & 0xffffu;
-    u32 note = 0;
-    while (note < 11 && mantissa >= t::semitone[note]) ++note;
-    return top * 12 + note;
-}
-
 // polyBLEP residual at a wrap: (1 - t)^2 where t is the distance to it in increments, Q24.
 inline i32 blep(u32 distance, u32 width, u32 reciprocal) {
     distance >>= 8;
@@ -98,31 +87,21 @@ inline void destroy(Voice&, Shared& shared, u32 owner) {
 // The note's first block: latch accent and slide, let the rain decide what's on auto.
 inline void begin(Voice& voice, Shared& shared, opxy::Parameters parameters, u32 increment) {
     const u32 a = choice(parameters[4]), s = choice(parameters[5]);
-    const bool rained = rain_note(shared.rain, shared.clock - shared.note_clock, parameters[6], parameters[7]);
+    // The rain model decides what's on auto, from note timing, pH and dew alone,
+    // so the screen's lane shows the same slides and accents.
+    const RainNote rain = rain_note(shared.rain, shared.clock - shared.note_clock, parameters[6], parameters[7]);
     shared.note_clock = shared.clock;
-    // The rain lane: the same three notes in a row decide the same way, at any pattern length.
-    const u32 note = semitone(increment);
-    u32 h = note * 0x9e3779b1u ^ shared.history[0] * 0x85ebca77u ^ shared.history[1] * 0xc2b2ae3du;
-    h ^= h >> 15;
-    h *= 0x2c1b3c6du;
-    h ^= h >> 12;
-    shared.history[1] = shared.history[0];
-    shared.history[0] = note;
-    const u32 offbeat = shared.notes++ & 1;
     voice.origin = shared.increment;
     voice.origin_envelope = shared.envelope;
 
     u32 lane = 0;
     if (a == on) lane |= lane_accent | lane_accent_locked;
-    else if (a == automatic && rained) lane |= lane_accent;
+    else if (a == automatic && rain.accent) lane |= lane_accent;
     if (s == on) lane |= lane_slide | lane_slide_locked;
     else if (s == automatic) {
-        // Out of 1024: slides favour off-beats; octaves and short gates need acid.
-        const i32 acid = acidity(parameters[6]), dew = parameters[7] < 0 ? 0 : parameters[7] >> 16;
-        const i32 glide = 40 + (acid * 420 >> 15);
-        if (static_cast<i32>(h & 1023) < (offbeat ? glide * 3 >> 1 : glide >> 1)) lane |= lane_slide;
-        if (static_cast<i32>(h >> 10 & 1023) < (acid * 260 >> 15)) lane |= lane_octave;
-        if (static_cast<i32>(h >> 20 & 1023) < ((acid * 150 + dew * 120) >> 15)) lane |= lane_short;
+        if (rain.slide) lane |= lane_slide;
+        if (rain.octave) lane |= lane_octave;
+        if (rain.short_gate) lane |= lane_short;
     }
     voice.lane = lane;
     const u32 octave = lane & lane_octave ? 1 : 0;

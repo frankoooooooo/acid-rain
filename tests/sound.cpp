@@ -204,6 +204,20 @@ int main() {
             octaves += (lanes[0][n] & acidrain::lane_octave) != 0;
         }
         check("the rain repeats", same);
+        // The screen runs the same model on the same note gaps, so its lane matches.
+        {
+            acidrain::Rain screen = acidrain::Rain();
+            bool matches = true;
+            for (u32 n = 0; n < 64; ++n) {
+                const acidrain::RainNote r = acidrain::rain_note(screen, n ? 86 : 1, 0, full);
+                const u32 lane = lanes[0][n];
+                matches = matches && r.accent == ((lane & acidrain::lane_accent) != 0) &&
+                          r.slide == ((lane & acidrain::lane_slide) != 0) &&
+                          r.octave == ((lane & acidrain::lane_octave) != 0) &&
+                          r.short_gate == ((lane & acidrain::lane_short) != 0);
+            }
+            check("the screen's lane matches the engine's", matches);
+        }
         check("dew 100 at pH 2 rains often", accents >= 12 && accents < 56);
         check("pH 2 slides and jumps octaves", slides >= 8 && octaves >= 4);
         std::printf("dew 100 pH 2: %u accents, %u slides, %u octaves in 64 sixteenths\n", accents, slides, octaves);

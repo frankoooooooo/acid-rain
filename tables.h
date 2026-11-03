@@ -35,6 +35,5 @@ const i32 feedback_highpass = 45894686;
 // The merged output highpass: b0, b1, b2, a1, a2 in Q30.
 const i32 hp_b0 = 1069580857, hp_b1 = -2139161713, hp_b2 = 1069580857;
 const i32 hp_a1 = -2139151943, hp_a2 = 1065429660;
-const u32 semitone[11] = {1920, 5932, 10181, 14684, 19454, 24507, 29862, 35534, 41544, 47912, 54658};
 }
 }

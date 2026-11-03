@@ -23,7 +23,7 @@ Press any encoder to switch pages.
 | 1 | env mod | 0 to 100 | 50 | How far the filter envelope opens the cutoff. On screen: the rings' height |
 | 1 | decay | `0.2s` to `2.0s` | `0.4s` | The filter envelope's decay. On screen: how long ripples last |
 | 2 | accent | `off`, `on`, `auto` | off | `on` accents every note; `auto` accents the notes it rains on. The eyes' outlines morph into bolts |
-| 2 | slide | `off`, `on`, `auto` | off | `on` glides into this note; `auto` lets the rain lane decide slides, octave jumps and short gates |
+| 2 | slide | `off`, `on`, `auto` | off | `on` glides into this note; `auto` lets the drizzle decide slides, octave jumps and short gates. The lane shows each slide as a bar |
 | 2 | ph | `2.0` to `7.0` | `7.0` | Turn anticlockwise for acid: more auto slides and octave jumps, and corrosion (wavefold and grit) that deepens over consecutive accents. 7.0 is clean. On screen: the face's line pits where the water moves it |
 | 2 | dew | 0 to 100 | 0 | How often it rains. 0 never rains. On screen: a splash and bolt eyes on each rain accent |
 
@@ -42,10 +42,13 @@ or `off` always wins, and `auto` hands that step to the rain.
   on the notes you hear accented.
 - **Monophonic slides**: a slide closes the note it replaces within about 5 ms,
   so the glide carries the line alone even on a polyphonic track.
-- **The rain lane** (slide on `auto`) decides slide, octave jump and short
-  gate from the note and the two before it, weighted by pH and dew. The same
-  notes give the same decisions at any pattern length; changing a note changes
-  only that part of the line.
+- **The drizzle** (slide on `auto`): each note also adds to a drizzle store
+  that dries with time. When it crosses a threshold set by pH, that note
+  slides in: dense playing slides more, gaps dry it out, and at pH 7 only
+  dense runs slide. Under pH 4.5 every other slide also jumps an octave, and
+  under pH 5.5 the note after a slide closes early. Like the rain, it depends
+  only on note timing, pH and dew, so the lane shows exactly the slides
+  (bars), octave jumps (squares above) and short gates (dim cells) you hear.
 
 Env mod and decay are an envelope on the engine page, which the OP-XY's UX
 guide normally leaves to the track's own envelopes. They stay because the 303's
@@ -60,10 +63,9 @@ presets do, and use mono play mode.
 
 - Accent, slide and the rain share one state across every track that plays
   Acid Rain, so slide and rain follow one line reliably on one track only.
-- The engine only counts time while it renders. After a long rest its humidity
-  can differ a little from the screen's, which counts real time.
-- The screen can't see pitch, so auto slides and octave jumps show in the
-  lane as neutral marks; locked slides show as bars and accents as large cells.
+- The engine only counts time while it renders. After a rest its humidity and
+  drizzle can differ from the screen's, which counts real time, so the lane
+  and splashes can drift from the audio until the stores settle again.
 
 ## Presets
 

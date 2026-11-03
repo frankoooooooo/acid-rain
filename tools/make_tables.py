@@ -65,9 +65,6 @@ a0 = 1 + alpha
 hp = [(1 + math.cos(w)) / 2 / a0, -(1 + math.cos(w)) / a0, (1 + math.cos(w)) / 2 / a0,
       -2 * math.cos(w) / a0, (1 - alpha) / a0]
 
-# Semitone boundaries inside an octave, for the rain lane's pitch hash: the
-# top 16 bits under an increment's leading one, at each half-semitone.
-SEMITONE = [q(2 ** ((s + 0.5) / 12) - 1, 16) for s in range(11)]
 
 engine = f'''#pragma once
 // Written by tools/make_tables.py: edit that and run it again.
@@ -106,7 +103,6 @@ const i32 feedback_highpass = {q31(2 * math.pi * 150 / FS)};
 // The merged output highpass: b0, b1, b2, a1, a2 in Q30.
 const i32 hp_b0 = {q(hp[0], 30)}, hp_b1 = {q(hp[1], 30)}, hp_b2 = {q(hp[2], 30)};
 const i32 hp_a1 = {q(hp[3], 30)}, hp_a2 = {q(hp[4], 30)};
-{row("semitone", "u32", SEMITONE)}
 }}
 }}
 '''
@@ -120,6 +116,9 @@ slow_pow = [q31(math.exp(-(2 ** b) * BLOCK / (FS * SLOW_TAU))) for b in range(13
 # Dew 1..100 sets the rain threshold, 3.2 down to 1.3 (Q24), exponential; 0 never rains.
 # Sixteenths at 120 bpm hold about 1.3 in the fast store and build 1.9 in the slow one.
 dew = [q(3.2 * (1.3 / 3.2) ** (i / 32), 24) for i in range(33)]
+# The drizzle threshold over the pH knob: 0.6 at pH 2.0 (a slide every second or
+# third note) to 6.0 at pH 7.0 (slides only in dense runs), Q24, exponential.
+drizzle = [q(0.6 * 10 ** (i / 32), 24) for i in range(33)]
 
 rain = f'''#pragma once
 // Written by tools/make_tables.py: edit that and run it again.
@@ -134,6 +133,8 @@ using opxy::i32;
 {row("slow_evaporation", "i32", slow_pow)}
 // The rain threshold over the dew knob, Q24 over 32 steps.
 {row("threshold", "i32", dew)}
+// The drizzle's slide threshold over the pH knob, Q24 over 32 steps.
+{row("drizzle", "i32", drizzle)}
 }}
 }}
 '''
