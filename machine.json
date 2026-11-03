@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "sdk": "1.8",
+  "sdk": "1.7",
   "kind": "synth",
   "description": "TB-303 voice from Open303 in fixed point, with accent and slide lanes the rain decides, pH corrosion and a refracted-water smiley screen.",
   "presets": "presets"

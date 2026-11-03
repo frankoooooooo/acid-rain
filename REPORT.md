@@ -1,6 +1,6 @@
 # Acid Rain report
 
-Host measurements at commit time, against SDK `staging` 5112f14 (SDK 1.8).
+Host measurements at commit time. The machine targets SDK 1.7, checked against open-xy `main` 9ff4c0f (CI) and `staging`.
 Nothing here is a device measurement: hardware CPU and the device checks below
 are still to do.
 
