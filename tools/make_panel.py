@@ -240,8 +240,8 @@ assert NODES <= 224, NODES
 SEGMENT = 32.0  # a grid segment's authored length; its node scales it to the joints
 
 palette = [  # fill, stroke width
-    ("#000000", 0.5), ("#5A5A5A", 0.6), ("#B4B4B4", OUTLINE / 2), ("#B4B4B4", max(MOUTH - 0.6, 0.5) / 2),
-    ("#C8C8C8", 0.5), ("#828282", 0.5), ("#4A4A4A", 0.5), ("#B4B4B4", EYES / 2),
+    ("#000000", 0.5), ("#5A5A5A", 0.6), ("#AFAFAF", OUTLINE / 2), ("#AFAFAF", max(MOUTH - 0.6, 0.5) / 2),
+    ("#CDCDCD", 0.5), ("#7D7D7D", 0.5), ("#4B4B4B", 0.5), ("#AFAFAF", EYES / 2),
 ]
 
 header_block = (ROOT / "panel.svg.fragment").read_text().split("<!-- SDK two-page header")[1]
@@ -267,25 +267,25 @@ out.append("<!-- The face, painted on the floor over the grid. -->")
 join = ' stroke-linejoin="round"' if OUTLINE >= 5 else ""
 cx, cy = screen(0, 0)
 border_half = [half(u, v) for u, v in border]
-out.append(f'<path id="acidrain_node_0" transform="matrix(1 0 0 1 {fmt(cx)} {fmt(cy)})" d="{path_d(border_half)}" fill="none" stroke="#B4B4B4" stroke-width="{fmt(OUTLINE / 2)}"{join}/>')
-out.append(f'<path id="acidrain_node_1" transform="matrix(1 0 0 1 {fmt(cx)} {fmt(cy)})" d="{path_d(smile_edges)}" fill="none" stroke="#B4B4B4" stroke-width="{fmt(max(MOUTH - 0.6, 0.5) / 2)}"{join}/>')
+out.append(f'<path id="acidrain_node_0" transform="matrix(1 0 0 1 {fmt(cx)} {fmt(cy)})" d="{path_d(border_half)}" fill="none" stroke="#AFAFAF" stroke-width="{fmt(OUTLINE / 2)}"{join}/>')
+out.append(f'<path id="acidrain_node_1" transform="matrix(1 0 0 1 {fmt(cx)} {fmt(cy)})" d="{path_d(smile_edges)}" fill="none" stroke="#AFAFAF" stroke-width="{fmt(max(MOUTH - 0.6, 0.5) / 2)}"{join}/>')
 
 
 for i, (u, v) in enumerate(eyes):
     points = [half(u + du, v + dv) for du, dv in ovals[i]]
-    out.append(f'<path id="acidrain_node_{2 + i}" transform="matrix(1 0 0 1 {fmt(cx)} {fmt(cy)})" d="{path_d(points)}" fill="none" stroke="#B4B4B4" stroke-width="{fmt(EYES / 2)}"{join}/>')
+    out.append(f'<path id="acidrain_node_{2 + i}" transform="matrix(1 0 0 1 {fmt(cx)} {fmt(cy)})" d="{path_d(points)}" fill="none" stroke="#AFAFAF" stroke-width="{fmt(EYES / 2)}"{join}/>')
 square = path_d([(-2, -2), (2, -2), (2, 2), (-2, 2)])
 bar = path_d([(-20, -2.5), (0, -2.5), (0, 2.5), (-20, 2.5)])  # 5 px: a slide reads at a glance
 dash = path_d([(-4, -1), (4, -1), (4, 1), (-4, 1)])
 for i in range(SPLASH_NODES):
-    out.append(f'<path id="acidrain_node_{SPLASH + i}" transform="matrix(1 0 0 1 640 320)" d="{square}" fill="#C8C8C8" stroke="#C8C8C8" stroke-width="0.5"/>')
+    out.append(f'<path id="acidrain_node_{SPLASH + i}" transform="matrix(1 0 0 1 640 320)" d="{square}" fill="#CDCDCD" stroke="#CDCDCD" stroke-width="0.5"/>')
 for i in range(16):
-    out.append(f'<path id="acidrain_node_{LANE + i}" transform="matrix(1 0 0 1 640 320)" d="{square}" fill="#828282" stroke="#828282" stroke-width="0.5"/>')
+    out.append(f'<path id="acidrain_node_{LANE + i}" transform="matrix(1 0 0 1 640 320)" d="{square}" fill="#7D7D7D" stroke="#7D7D7D" stroke-width="0.5"/>')
 for i in range(16):
-    out.append(f'<path id="acidrain_node_{LANE + 16 + i}" transform="matrix(1 0 0 1 640 320)" d="{bar}" fill="#C8C8C8" stroke="#C8C8C8" stroke-width="0.5"/>')
+    out.append(f'<path id="acidrain_node_{LANE + 16 + i}" transform="matrix(1 0 0 1 640 320)" d="{bar}" fill="#CDCDCD" stroke="#CDCDCD" stroke-width="0.5"/>')
 for i in range(16):
-    out.append(f'<path id="acidrain_node_{LANE + 32 + i}" transform="matrix(1 0 0 1 640 320)" d="{square}" fill="#4A4A4A" stroke="#4A4A4A" stroke-width="0.5"/>')
-out.append(f'<path id="acidrain_node_{LANE + 48}" transform="matrix(1 0 0 1 640 320)" d="{dash}" fill="#828282" stroke="#828282" stroke-width="0.5"/>')
+    out.append(f'<path id="acidrain_node_{LANE + 32 + i}" transform="matrix(1 0 0 1 640 320)" d="{square}" fill="#4B4B4B" stroke="#4B4B4B" stroke-width="0.5"/>')
+out.append(f'<path id="acidrain_node_{LANE + 48}" transform="matrix(1 0 0 1 640 320)" d="{dash}" fill="#7D7D7D" stroke="#7D7D7D" stroke-width="0.5"/>')
 for i, (colour, width) in enumerate(palette):
     out.append(f'<circle id="acidrain_palette_{i}" cx="640" cy="0" r="1" fill="{colour}" stroke="{colour}" stroke-width="{fmt(width)}"/>')
 out.append("</g>")

@@ -380,7 +380,7 @@ inline void display(DisplayState& state, const Input& input, Frame& frame) {
             // A cluster of rain splashes once: a new splash waits until the last is 0.4 s old.
             const Splash& previous = state.splashes[(state.next_splash + splash_count - 1) % splash_count];
             // A locked accent on every note splashes at most every 0.8 s.
-            const i32 wait = rained ? 410 : 819;
+            const i32 wait = rained ? 614 : 819;  // rain splashes 0.6 s apart
             if (!still && (previous.age < 0 || previous.age >= wait)) {
                 Splash& splash = state.splashes[state.next_splash++ % splash_count];
                 splash.u = u;

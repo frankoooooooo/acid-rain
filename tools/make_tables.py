@@ -113,9 +113,10 @@ const i32 hp_a1 = {q(hp[3], 30)}, hp_a2 = {q(hp[4], 30)};
 FAST_TAU, SLOW_TAU = 0.6, 6.0
 fast_pow = [q31(math.exp(-(2 ** b) * BLOCK / (FS * FAST_TAU))) for b in range(13)]
 slow_pow = [q31(math.exp(-(2 ** b) * BLOCK / (FS * SLOW_TAU))) for b in range(13)]
-# Dew 1..100 sets the rain threshold, 3.2 down to 1.3 (Q24), exponential; 0 never rains.
-# Sixteenths at 120 bpm hold about 1.3 in the fast store and build 1.9 in the slow one.
-dew = [q(3.2 * (1.3 / 3.2) ** (i / 32), 24) for i in range(33)]
+# Dew 1..100 sets the rain threshold, 2.4 down to 1.0 (Q24), exponential; 0 never rains.
+# Sixteenths at 120 bpm hold about 1.3 in the fast store and build 1.9 in the slow one,
+# so mid dew rains within about a second of steady playing.
+dew = [q(2.4 * (1.0 / 2.4) ** (i / 32), 24) for i in range(33)]
 # The drizzle threshold over the pH knob: 0.6 at pH 2.0 (a slide every second or
 # third note) to 6.0 at pH 7.0 (slides only in dense runs), Q24, exponential.
 drizzle = [q(0.6 * 10 ** (i / 32), 24) for i in range(33)]

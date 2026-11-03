@@ -90,7 +90,7 @@ the feedback highpass from 150 to 400 Hz moved the 40-160 Hz share by under
 | Setting | Nodes changed a frame, average | Peak | At rest |
 | --- | --- | --- | --- |
 | Defaults | 14.5 | 18 | 0 |
-| Heaviest (reso, env mod, decay 2.0 s, dew 100, pH 2, accent auto, slide on) | 21.4 | 34 | 0 |
+| Heaviest (reso, env mod, decay 2.0 s, dew 100, pH 2, accent auto, slide on) | 20.4 | 37 | 0 |
 | Highest cutoff, pH 2, accent on | 14.9 | 18 | 0 |
 | Reduced motion | 0.6 | 5 | 0 |
 
