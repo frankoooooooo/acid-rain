@@ -101,23 +101,24 @@ the feedback highpass from 150 to 400 Hz moved the 40-160 Hz share by under
 
 | Setting | Nodes changed a frame, average | Peak | At rest |
 | --- | --- | --- | --- |
-| Defaults | 14.5 | 18 | 0 |
+| Defaults | 15.6 | 20 | 0 |
 | Heaviest (reso, env mod, decay 2.0 s, dew 100, pH 2, accent auto, slide on) | 20.4 | 37 | 0 |
-| Highest cutoff, pH 2, accent on | 14.9 | 18 | 0 |
-| Reduced motion | 0.6 | 5 | 0 |
+| Highest cutoff, pH 2, accent on | 20.7 | 36 | 0 |
+| Reduced motion | 0.7 | 5 | 0 |
 
 The face is four outlines (border, smile, two eyes), each redrawn as one node.
 One refraction field moves the floor and the face alike, at most 5 px however
-many drops overlap, so the smile and eyes stay at least 7.1 px inside the
-border (checked over the heaviest run). Each drop has its own ring tightness,
-height and phase and two late satellite drops, so rings interfere unevenly.
-The face's rings are never finer than 4 of its points (the floor's can be), the
-border's shift is smoothed four times and its points are spaced evenly along
-the ellipse, and a spacing guard keeps neighbours at 64% or more of their
-resting spacing: the water adds at most 28 degrees of turn at any border point
-(a sawtooth adds 60 or more). On every note a tilted, sliced teardrop falls
-onto the impact over 0.1 s, its bands tearing sideways each frame; a splash
-now marks only the rain.
+many drops overlap. Each drop has its own ring tightness, height and phase,
+plus two late satellite drops, so rings interfere unevenly. The face's rings
+are never finer than 4 of its points; the border's shift is smoothed five
+times over points spaced evenly along the ellipse; each eye rides the water
+whole; and a guard keeps every step along an outline at 60% or more of its
+resting length along its resting direction, so lines neither bunch nor fold.
+Over the test runs the smile and eyes stay at least 6.1 px inside the border,
+border neighbours keep 66% of their spacing, the water adds at most 26 degrees
+of turn, outline points stay 1/8 px apart with closing edges of 1/4 px or more,
+and no outline turns within 13 degrees of straight back. A splash marks rain
+(at most every 0.6 s) and locked accents (at most every 0.8 s).
 
 To stay near 20: ripples reach less far, about 12 grid segments and splash
 pixels redraw a frame (the joints furthest out of place first, the rest catch
@@ -150,4 +151,4 @@ Checked with [operator-design](https://github.com/thoughtgrain/operator-design).
   every control pair; photos at rest, playing and heaviest.
 - **Captions**: not measured in Univers Next Pro (the font isn't on this
   machine). The longest are `auto`, `5.6k`, `0.4s`, `803`.
-- **Pre-filter drive** (ACIDXY-style): not built.
+- **Pre-filter drive** (ACIDXY-style): tried below pH 7 and removed by ear; plain was preferred.
