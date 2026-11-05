@@ -10,6 +10,7 @@ are still to do.
 | --- | --- | --- |
 | `sdk.py test` estimate, heaviest setting | 31,900–36,700 on a Mac (varies run to run); 22,000 on GitHub CI | 30,500 on the same Mac |
 | Hardware readout (`opxy-synth-c8-sweep-v1`), v1.0.0 (`7f9c8dc`), 3 runs | 3.107% stock midpoint, about 2.8% clean (pH 7), 3.168% heaviest (pH 12.5%), 3.055% every control at its heaviest | 6.08% default, 7.72% heaviest (Wav Dist) |
+| Hardware readout (`opxy-synth-c8-sweep-v1`), v1.0.2 (`39be753`, onset-click fix), 1 run, firmware `fd418de6…` | 3.149% stock midpoint, 3.185% heaviest (pH 12.5%), 3.117% every control at its heaviest | |
 
 On the device Acid Rain costs about half of ACIDXY. Cutoff, reso, env mod,
 decay, accent, slide and dew don't change its cost (2.68% to 2.70%): every
