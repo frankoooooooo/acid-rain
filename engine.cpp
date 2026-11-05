@@ -180,6 +180,9 @@ inline void render(Voice& voice, Shared& shared, u32 owner, opxy::Output output,
     i32 gain = multiply(k16, 126322568) - 65536;                 // k / 17 - 1, Q16
     gain = multiply(gain, r) + 65536;
     gain = (gain + multiply(gain, r)) << 11;                     // 2 g / 32, Q31
+    // A note's first block starts the ladder at its target: ramping up from a
+    // fresh voice's 0 swept the resonance across the spectrum, a click.
+    if (voice.age == 1) { voice.b0x2 = b0x2; voice.feedback = feedback; }
 
     // The VCA: Open303's amp envelope, plus 0.45 of the filter envelope, plus
     // more under accent; Q31 / 8. The short gate closes all of it.
@@ -208,6 +211,12 @@ inline void render(Voice& voice, Shared& shared, u32 owner, opxy::Output output,
     const u32 reciprocal = 0x40000000u / width;  // the block's one divide
     u32 phase = voice.phase;
     i32 pre_low = voice.pre_low, glide = offset;
+    // The phase runs free but a fresh voice's highpass is empty: settle it on
+    // the saw's current value, or the ladder sees a step that rings at high resonance.
+    if (voice.age == 1) {
+        pre_low = saw(phase, played, width, reciprocal);
+        if (square_wave) pre_low = shape(t::square, pre_low, 17);
+    }
     for (unsigned i = 0; i < opxy::block_frames; i += 2) {
         u32 increment = (pitch[i] << octave) + static_cast<u32>(glide);
         i32 x = saw(phase, increment, width, reciprocal);

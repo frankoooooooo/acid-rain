@@ -244,6 +244,26 @@ int main() {
         check("a sounding note isn't silent", (early.voices[0].lane & acidrain::lane_quiet) == 0);
     }
 
+    // No onset click at full cutoff, resonance and env mod: a note's first two
+    // blocks carry no more top end (first-difference energy) than its steady
+    // part. Ladder coefficients ramped up from 0 and an empty input highpass
+    // made the onset 15x the steady part.
+    {
+        static i32 x[30 * 64];
+        const i32 squelch[8] = {full, full, full, full / 2, off, off, full, 0};
+        long long onset = 0, steady = 0;
+        Line line;
+        for (u32 n = 0; n < 8; ++n) {
+            line.play(squelch, a2 * 2, 30, x);
+            for (u32 i = 1; i < 30 * 64; ++i) {
+                const long long d = (x[i] >> 12) - (x[i - 1] >> 12);
+                if (i < 128) onset += d * d * 10; else if (i >= 640) steady += d * d;  // blocks 0-1 vs 10-29, per block
+            }
+        }
+        check("no onset click", onset < steady * 2);
+        std::printf("onset top end %.2f of the steady part\n", static_cast<double>(onset) / steady);
+    }
+
     // pH 2 corrodes what pH 7 leaves clean.
     {
         static i32 x[64 * 64], z[64 * 64];
